@@ -1,5 +1,7 @@
 {
   "name": "hypertoroid",
+  "main": "dist/hypertoroid.js",
+  "types": "dist/hypertoroid.d.ts",
   "version": "0.0.1",
   "repository": {
     "type": "git",
