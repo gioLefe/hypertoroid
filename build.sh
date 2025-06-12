@@ -1,1 +1,1 @@
-npx esbuild src/index.ts --bundle --outfile=dist/hypertoroid.js
+npx tsc && node esbuild.js
