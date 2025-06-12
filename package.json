@@ -1,0 +1,19 @@
+{
+  "name": "hypertoroid",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gioLefe/hypertoroid.git"
+  },
+  "author": "giolefe",
+  "license": "ISC",
+  "homepage": "https://github.com/gioLefe/hypertoroid#readme",
+  "description": "",
+  "dependencies": {
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "esbuild": "^0.25.5"
+  }
+}
