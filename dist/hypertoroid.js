@@ -1203,4 +1203,4 @@ export {
   updatePolygonShape,
   withEvents
 };
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=hypertoroid.js.map

@@ -1,6 +1,6 @@
 import { EventCallback } from "../with-events";
 import { UILabel } from "./label";
-declare const UIClickableLabel_base: import("../..").AnonymousClass<import("../with-events").WithEvents> & typeof UILabel;
+declare const UIClickableLabel_base: import("../../models").AnonymousClass<import("../with-events").WithEvents> & typeof UILabel;
 export declare class UIClickableLabel extends UIClickableLabel_base {
     protected mouseOver: boolean;
     private mouseEnterCallbacks;

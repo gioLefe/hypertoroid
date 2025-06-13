@@ -3,8 +3,8 @@ const esbuild = require("esbuild");
 
 esbuild
   .build({
-    entryPoints: ["./src/index.ts"],
-    outfile: "./dist/index.js",
+    entryPoints: ["./src/hypertoroid.ts"],
+    outfile: "./dist/hypertoroid.js",
     bundle: true,
     minify: false,
     sourcemap: true,

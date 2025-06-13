@@ -4,13 +4,15 @@
   "main": "dist/hypertoroid.js",
   "module": "dist/hypertoroid.js",
   "types": "dist/hypertoroid.d.ts",
-  "exports":{
+  "exports": {
     ".": {
       "import": "./dist/hypertoroid.js",
       "types": "./dist/hypertoroid.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gioLefe/hypertoroid.git"
