@@ -19,8 +19,8 @@ export abstract class GameObject<T = GraphicContext> implements GameCycle {
     this.ctx = ctx;
   }
 
-  init(..._args: any) {}
-  update(_deltaTime: number, ..._args: any) {}
+  async init(..._args: any) {}
+  async update(_deltaTime: number, ..._args: any) {}
   render(..._args: any) {}
   clean(..._args: any) {}
 

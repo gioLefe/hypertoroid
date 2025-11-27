@@ -38,10 +38,10 @@ export class UILabel extends GameObject<CanvasRenderingContext2D> {
     this.text = text ?? "";
   }
 
-  override init(...args: any) {
-    super.init(...args);
+  override async init(...args: any) {
+    await super.init(...args);
   }
-  override update(deltaTime: number, ...args: any) {
+  override async update(deltaTime: number, ...args: any) {
     super.update(deltaTime, args);
     if (this.text === undefined || this.position === undefined) {
       return;

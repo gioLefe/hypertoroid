@@ -11,7 +11,7 @@ export class UIClickableLabel extends withEvents(UILabel) {
   private mouseEnterCallbacks: EventCallback[] = [];
   private mouseLeaveCallbacks: EventCallback[] = [];
 
-  override init(canvas: HTMLCanvasElement, ..._args: any): void {
+  override async init(canvas: HTMLCanvasElement, ..._args: any): Promise<void> {
     super.init(canvas);
 
     this.addCallback<"mousemove">(

@@ -16,8 +16,8 @@ export declare class UIPanel extends GameObject<CanvasRenderingContext2D> {
     private allItemsHeight;
     private heightGap;
     constructor(ctx: CanvasRenderingContext2D);
-    init(...args: any): void;
-    update(deltaTime: number, ...args: any): void;
+    init(...args: any): Promise<void>;
+    update(deltaTime: number, ...args: any): Promise<void>;
     clean(...args: any): void;
     render(...args: any): void;
     addPanelItem(gameObject: GameObject): void;

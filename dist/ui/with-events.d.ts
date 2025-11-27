@@ -6,8 +6,8 @@ export type EventCallback = (...args: any[]) => void;
 export type Callback<T extends EventType> = {
     eventType: T;
     ev: EventCallback | AsyncEventCallback;
-    blocking: boolean;
-    triggerCondition?: TriggerCondition<T>;
+    synchronous: boolean;
+    triggerCondition: TriggerCondition<T>;
 };
 export type WithEvents = {
     events: Map<string, Callback<EventType>>;

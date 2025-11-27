@@ -12,3 +12,4 @@ export * from "./sprite";
 export * from "./structs";
 export * from "./unit-vector";
 export * from "./vec";
+export * from "./size";

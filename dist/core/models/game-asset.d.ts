@@ -1,5 +1,5 @@
-export type GameAsset = {
+export type GameAssetRequest = {
     id: string;
     path: string;
-    type: "IMAGE" | "AUDIO";
+    type: "IMAGE" | "AUDIO" | "JSON" | "TEXT";
 };

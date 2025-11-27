@@ -35,7 +35,7 @@ export abstract class Game implements GameCycle {
     canvas: HTMLCanvasElement,
     canvasWidth: number,
     canvasHeight: number,
-    fps: number = 30,
+    fps: number = 30
   ) {
     if (canvas === null) {
       console.error(`%c *** Error, Canvas cannot be null`);
@@ -55,7 +55,7 @@ export abstract class Game implements GameCycle {
 
     this.lastUpdateTime = 0;
     this.deltaTime = 0;
-    this.frameInterval - 1000 / fps;
+    this.frameInterval = 1000 / fps;
 
     this.init();
   }
@@ -63,7 +63,7 @@ export abstract class Game implements GameCycle {
     throw new Error("Method not implemented.");
   }
 
-  init(): void {
+  async init(): Promise<void> {
     if (this.debug.init) {
       console.log(`%c *** Init`, `background:#020; color:#adad00`);
     }
@@ -73,30 +73,36 @@ export abstract class Game implements GameCycle {
     this.settingsManager = new Settings();
     this.diContainer.register<SceneHandler>(
       SCENE_MANAGER_DI,
-      this.sceneManager,
+      this.sceneManager
     );
     this.diContainer.register<AssetsHandler>(
       ASSETS_MANAGER_DI,
-      this.assetsManager,
+      this.assetsManager
     );
     this.diContainer.register<AudioController>(
       AudioController.AUDIO_CONTROLLER_DI,
-      new AudioController(),
+      new AudioController()
     );
     this.diContainer.register<Settings>(
       Settings.SETTINGS_DI,
-      this.settingsManager,
+      this.settingsManager
     );
   }
 
-  update(deltaTime: number): void {
+  async update(deltaTime: number): Promise<void> {
     if (this.debug.update) {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
 
-    this.sceneManager
-      ?.getCurrentScenes()
-      ?.forEach((scene) => scene.update(deltaTime));
+    const currentScenes = this.sceneManager?.getCurrentScenes();
+
+    if (currentScenes === undefined) {
+      console.warn("no scene to update");
+      return;
+    }
+    await Promise.allSettled(
+      currentScenes.map((scene) => scene.update(deltaTime))
+    );
   }
 
   render(..._args: any): void {
@@ -114,13 +120,13 @@ export abstract class Game implements GameCycle {
     currentScenes.forEach((scene) => scene.render(this.ctx));
   }
 
-  gameLoop = (timestamp: number): void => {
+  gameLoop = async (timestamp: number): Promise<void> => {
     const elapsed = timestamp - this.lastUpdateTime;
     if (elapsed > this.frameInterval) {
       this.deltaTime = elapsed / 1000; // Convert to
       this.lastUpdateTime = timestamp;
 
-      this.update(this.deltaTime);
+      await this.update(this.deltaTime);
       this.render(this.ctx);
     }
 

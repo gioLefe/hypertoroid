@@ -1,9 +1,12 @@
 {
   "name": "hypertoroid",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/hypertoroid.js",
   "module": "dist/hypertoroid.js",
   "types": "dist/hypertoroid.d.ts",
+  "scripts": {
+    "build": "npx tsc && node esbuild.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/hypertoroid.js",

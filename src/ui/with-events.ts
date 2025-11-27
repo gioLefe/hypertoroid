@@ -2,7 +2,7 @@ import { AnonymousClass } from "../models";
 
 export type EventType = keyof HTMLElementEventMap;
 export type TriggerCondition<T extends EventType> = (
-  ev: HTMLElementEventMap[T],
+  ev: HTMLElementEventMap[T]
 ) => boolean;
 
 export type AsyncEventCallback = (...args: any[]) => Promise<void>;
@@ -11,8 +11,8 @@ export type EventCallback = (...args: any[]) => void;
 export type Callback<T extends EventType> = {
   eventType: T;
   ev: EventCallback | AsyncEventCallback;
-  blocking: boolean;
-  triggerCondition?: TriggerCondition<T>;
+  synchronous: boolean;
+  triggerCondition: TriggerCondition<T>;
 };
 
 export type WithEvents = {
@@ -23,7 +23,7 @@ export type WithEvents = {
     id: string,
     eventCallback: EventCallback | AsyncEventCallback,
     blocking: boolean,
-    triggerCondition?: TriggerCondition<T>,
+    triggerCondition?: TriggerCondition<T>
   ): void;
   enableEvent<T>(eventType: T): (eventTarget: EventTarget) => void;
   removeCallback(id: string): void;
@@ -38,7 +38,7 @@ export type WithEvents = {
  * @returns {AnonymousClass<WithEvents>} A new class that extends the original class with event handling capabilities.
  */
 export function withEvents<T extends AnonymousClass<unknown>>(
-  obj: T,
+  obj: T
 ): AnonymousClass<WithEvents> & T {
   return class extends obj implements WithEvents {
     /**
@@ -63,8 +63,8 @@ export function withEvents<T extends AnonymousClass<unknown>>(
       eventType: K,
       id: string,
       ev: EventCallback,
-      blocking: boolean,
-      triggerCondition?: TriggerCondition<K>,
+      synchronous: boolean,
+      triggerCondition: TriggerCondition<K> = () => true
     ): void {
       if (this.events?.has(id)) {
         console.warn(`event with id ${id} already exists!`);
@@ -73,7 +73,7 @@ export function withEvents<T extends AnonymousClass<unknown>>(
       this.events?.set(id, {
         eventType,
         ev,
-        blocking,
+        synchronous,
         triggerCondition: triggerCondition as TriggerCondition<EventType>,
       });
     }
@@ -106,7 +106,7 @@ export function withEvents<T extends AnonymousClass<unknown>>(
      * @returns {(eventTarget: EventTarget) => void} A function that takes an event target and adds the event listeners to it.
      */
     enableEvent<EventType>(
-      eventType: EventType,
+      eventType: EventType
     ): (eventTarget: EventTarget) => void {
       return (eventTarget: EventTarget) => {
         if (eventTarget === undefined) {
@@ -122,7 +122,6 @@ export function withEvents<T extends AnonymousClass<unknown>>(
             async (ev: Event) => {
               if (
                 callBack.eventType !== eventType ||
-                callBack.triggerCondition === undefined ||
                 callBack.triggerCondition(ev) === false
               ) {
                 return;
@@ -131,12 +130,12 @@ export function withEvents<T extends AnonymousClass<unknown>>(
                 console.warn(`empty event cannot be run!`);
                 return;
               }
-              if (callBack.blocking) {
+              if (callBack.synchronous) {
                 return await callBack.ev(ev);
               }
               return callBack.ev(ev);
             },
-            { signal: controller.signal },
+            { signal: controller.signal }
           );
         });
       };

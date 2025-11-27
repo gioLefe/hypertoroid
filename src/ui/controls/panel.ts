@@ -42,10 +42,10 @@ export class UIPanel extends GameObject<CanvasRenderingContext2D> {
     super(ctx);
   }
 
-  override init(...args: any): void {
+  override async init(...args: any): Promise<void> {
     super.init(args);
   }
-  override update(deltaTime: number, ...args: any): void {
+  override async update(deltaTime: number, ...args: any): Promise<void> {
     super.update(deltaTime, args);
     this.items.forEach((i) => i.update(deltaTime, args));
   }

@@ -16,9 +16,9 @@ export declare abstract class Game implements GameCycle {
     private debug;
     constructor(canvas: HTMLCanvasElement, canvasWidth: number, canvasHeight: number, fps?: number);
     clean(..._args: any): void;
-    init(): void;
-    update(deltaTime: number): void;
+    init(): Promise<void>;
+    update(deltaTime: number): Promise<void>;
     render(..._args: any): void;
-    gameLoop: (timestamp: number) => void;
+    gameLoop: (timestamp: number) => Promise<void>;
     start(): void;
 }

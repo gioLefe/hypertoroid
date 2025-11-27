@@ -7,3 +7,7 @@ export type SoundAsset = {
     source: ArrayBuffer;
     tags: Tag[];
 };
+export type GenericFileAsset = {
+    source: any;
+    tags: Tag[];
+};

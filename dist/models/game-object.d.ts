@@ -11,8 +11,8 @@ export declare abstract class GameObject<T = GraphicContext> implements GameCycl
     protected bbox: BoundingBox<number>;
     protected direction: number;
     constructor(ctx: T);
-    init(..._args: any): void;
-    update(_deltaTime: number, ..._args: any): void;
+    init(..._args: any): Promise<void>;
+    update(_deltaTime: number, ..._args: any): Promise<void>;
     render(..._args: any): void;
     clean(..._args: any): void;
     setPosition(value: Vec2<number>): void;

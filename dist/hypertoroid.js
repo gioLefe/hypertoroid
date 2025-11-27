@@ -143,9 +143,6 @@ var AssetsManager = class {
     );
   }
   find(id) {
-    if (this.assets.has(id) === false) {
-      throw new Error(`cannot find asset ${id}`);
-    }
     return this.assets.get(id);
   }
   delete(id) {
@@ -160,35 +157,99 @@ var AssetsManager = class {
     a.tags.push(tag);
     this.assets.set(id, a);
   }
+  update(id, asset) {
+    if (this.assets.has(id) === false) {
+      console.warn(`Cannot find asset ${id}`);
+      return;
+    }
+    this.assets.set(id, asset);
+  }
+  updateId(oldId, newId) {
+    if (this.assets.has(oldId) === false) {
+      console.warn(`Cannot find asset ${oldId}`);
+      return;
+    }
+    const asset = this.assets.get(oldId);
+    if (asset === void 0) {
+      console.warn(`Cannot find asset ${oldId}`);
+      return;
+    }
+    this.assets.set(newId, asset);
+    this.assets.delete(oldId);
+  }
+  /**
+   * Get all pixel data from an image asset
+   * @param assetId - The ID of the image asset
+   * @returns ImageData object or null if asset not found or not an image
+   */
+  getImageData(assetId) {
+    const asset = this.assets.get(assetId);
+    if (!asset || !("source" in asset) || !(asset.source instanceof HTMLImageElement)) {
+      return null;
+    }
+    const image = asset.source;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return null;
+    }
+    canvas.width = image.width;
+    canvas.height = image.height;
+    ctx.drawImage(image, 0, 0);
+    return ctx.getImageData(0, 0, image.width, image.height);
+  }
   createObjectPromise(assetManagerHandle, assetRequest) {
     return new Promise((resolve, reject) => {
       let obj;
-      if (assetRequest.type === "AUDIO") {
-        const request = new XMLHttpRequest();
-        request.open("GET", assetRequest.path, true);
-        request.responseType = "arraybuffer";
-        request.onload = function() {
-          assetManagerHandle.assets.set(assetRequest.id, {
-            source: request.response,
-            tags: []
-          });
-          return resolve();
-        };
-        request.send();
-        return;
+      let responseType;
+      switch (assetRequest.type) {
+        case "AUDIO":
+          responseType = "arraybuffer";
+          break;
+        case "JSON":
+          responseType = "json";
+          break;
+        default:
+          responseType = "";
       }
-      obj = new Image();
-      obj.onload = function() {
-        assetManagerHandle.assets.set(assetRequest.id, {
-          source: obj,
-          tags: []
-        });
-        return resolve();
-      };
-      obj.onerror = function() {
-        reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
-      };
-      obj.src = assetRequest.path;
+      switch (assetRequest.type) {
+        case "TEXT":
+        case "JSON":
+        case "AUDIO":
+          const request = new XMLHttpRequest();
+          request.open("GET", assetRequest.path, true);
+          request.responseType = responseType;
+          request.onload = function() {
+            assetManagerHandle.assets.set(assetRequest.id, {
+              source: request.response,
+              tags: [],
+              ...assetRequest
+            });
+            return resolve();
+          };
+          request.onerror = function() {
+            reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
+          };
+          request.send();
+          break;
+        case "IMAGE":
+          obj = new Image();
+          obj.onload = function() {
+            assetManagerHandle.assets.set(assetRequest.id, {
+              source: obj,
+              tags: [],
+              ...assetRequest
+            });
+            return resolve();
+          };
+          obj.onerror = function() {
+            reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
+          };
+          obj.src = assetRequest.path;
+          break;
+        default:
+          reject(`unsupported asset type ${assetRequest.type}`);
+      }
     });
   }
 };
@@ -212,12 +273,12 @@ var Game = class {
       update: false,
       render: false
     });
-    __publicField(this, "gameLoop", (timestamp) => {
+    __publicField(this, "gameLoop", async (timestamp) => {
       const elapsed = timestamp - this.lastUpdateTime;
       if (elapsed > this.frameInterval) {
         this.deltaTime = elapsed / 1e3;
         this.lastUpdateTime = timestamp;
-        this.update(this.deltaTime);
+        await this.update(this.deltaTime);
         this.render(this.ctx);
       }
       requestAnimationFrame(this.gameLoop);
@@ -236,13 +297,13 @@ var Game = class {
     this.ctx = context;
     this.lastUpdateTime = 0;
     this.deltaTime = 0;
-    this.frameInterval - 1e3 / fps;
+    this.frameInterval = 1e3 / fps;
     this.init();
   }
   clean(..._args) {
     throw new Error("Method not implemented.");
   }
-  init() {
+  async init() {
     if (this.debug.init) {
       console.log(`%c *** Init`, `background:#020; color:#adad00`);
     }
@@ -266,11 +327,18 @@ var Game = class {
       this.settingsManager
     );
   }
-  update(deltaTime) {
+  async update(deltaTime) {
     if (this.debug.update) {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
-    this.sceneManager?.getCurrentScenes()?.forEach((scene) => scene.update(deltaTime));
+    const currentScenes = this.sceneManager?.getCurrentScenes();
+    if (currentScenes === void 0) {
+      console.warn("no scene to update");
+      return;
+    }
+    await Promise.allSettled(
+      currentScenes.map((scene) => scene.update(deltaTime))
+    );
   }
   render(..._args) {
     if (this.debug.render) {
@@ -666,9 +734,9 @@ var GameObject = class {
     __publicField(this, "direction", 0);
     this.ctx = ctx;
   }
-  init(..._args) {
+  async init(..._args) {
   }
-  update(_deltaTime, ..._args) {
+  async update(_deltaTime, ..._args) {
   }
   render(..._args) {
   }
@@ -844,7 +912,7 @@ function withEvents(obj) {
     /**
      * Adds a callback for a specific event type and ID.
      */
-    addCallback(eventType, id, ev, blocking, triggerCondition) {
+    addCallback(eventType, id, ev, synchronous, triggerCondition = () => true) {
       if (this.events?.has(id)) {
         console.warn(`event with id ${id} already exists!`);
         return;
@@ -852,7 +920,7 @@ function withEvents(obj) {
       this.events?.set(id, {
         eventType,
         ev,
-        blocking,
+        synchronous,
         triggerCondition
       });
     }
@@ -891,14 +959,14 @@ function withEvents(obj) {
           eventTarget.addEventListener(
             eventType,
             async (ev) => {
-              if (callBack.eventType !== eventType || callBack.triggerCondition === void 0 || callBack.triggerCondition(ev) === false) {
+              if (callBack.eventType !== eventType || callBack.triggerCondition(ev) === false) {
                 return;
               }
               if (ev === void 0) {
                 console.warn(`empty event cannot be run!`);
                 return;
               }
-              if (callBack.blocking) {
+              if (callBack.synchronous) {
                 return await callBack.ev(ev);
               }
               return callBack.ev(ev);
@@ -923,6 +991,23 @@ function getTextBBox(ctx, text, position) {
     y: position.y - metrics.actualBoundingBoxDescent
   };
   return { nw, se };
+}
+function getWrappedTextLines(ctx, text, maxWidth) {
+  var words = text.split(" ");
+  var lines = [];
+  var currentLine = words[0];
+  for (var i = 1; i < words.length; i++) {
+    var word = words[i];
+    var width = ctx.measureText(currentLine + " " + word).width;
+    if (width < maxWidth) {
+      currentLine += " " + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  lines.push(currentLine);
+  return lines;
 }
 
 // src/ui/controls/label.ts
@@ -953,10 +1038,10 @@ var UILabel = class extends GameObject {
     }
     this.text = text ?? "";
   }
-  init(...args) {
-    super.init(...args);
+  async init(...args) {
+    await super.init(...args);
   }
-  update(deltaTime, ...args) {
+  async update(deltaTime, ...args) {
     super.update(deltaTime, args);
     if (this.text === void 0 || this.position === void 0) {
       return;
@@ -1034,7 +1119,7 @@ var UIClickableLabel = class extends withEvents(UILabel) {
       this.mouseLeaveCallbacks.push(ev);
     });
   }
-  init(canvas, ..._args) {
+  async init(canvas, ..._args) {
     super.init(canvas);
     this.addCallback(
       "mousemove",
@@ -1104,10 +1189,10 @@ var UIPanel = class extends GameObject {
     __publicField(this, "allItemsHeight", 0);
     __publicField(this, "heightGap", MENUNODES_GAP);
   }
-  init(...args) {
+  async init(...args) {
     super.init(args);
   }
-  update(deltaTime, ...args) {
+  async update(deltaTime, ...args) {
     super.update(deltaTime, args);
     this.items.forEach((i) => i.update(deltaTime, args));
   }
@@ -1189,6 +1274,7 @@ export {
   getTextBBox,
   getVectorPerpendicular,
   getWorldPolygon,
+  getWrappedTextLines,
   intervalsOverlap,
   isPointInAlignedBBox,
   magnitude,

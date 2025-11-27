@@ -8,8 +8,8 @@ export declare class UILabel extends GameObject<CanvasRenderingContext2D> {
     protected textFillStyle: FillStrokeStyle | undefined;
     protected textStrokeStyle: FillStrokeStyle | undefined;
     constructor(ctx: CanvasRenderingContext2D, id: string, posX?: number, posY?: number, textStyle?: Partial<CanvasTextDrawingStyles>, text?: string);
-    init(...args: any): void;
-    update(deltaTime: number, ...args: any): void;
+    init(...args: any): Promise<void>;
+    update(deltaTime: number, ...args: any): Promise<void>;
     render(...args: any): void;
     clean(...args: any): void;
     setText(text: string): void;

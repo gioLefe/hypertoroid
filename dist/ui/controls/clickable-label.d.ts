@@ -5,7 +5,7 @@ export declare class UIClickableLabel extends UIClickableLabel_base {
     protected mouseOver: boolean;
     private mouseEnterCallbacks;
     private mouseLeaveCallbacks;
-    init(canvas: HTMLCanvasElement, ..._args: any): void;
+    init(canvas: HTMLCanvasElement, ..._args: any): Promise<void>;
     clean(..._args: any): void;
     addMouseEnterCallback: (ev: EventCallback) => void;
     addMouseLeaveCallback: (ev: EventCallback) => void;
