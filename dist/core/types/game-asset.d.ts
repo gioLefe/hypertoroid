@@ -3,3 +3,4 @@ export type GameAssetRequest = {
     path: string;
     type: "IMAGE" | "AUDIO" | "JSON" | "TEXT";
 };
+//# sourceMappingURL=game-asset.d.ts.map

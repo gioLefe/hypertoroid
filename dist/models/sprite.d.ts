@@ -4,3 +4,4 @@ export interface Sprite extends GameCycle {
     rotate(radiants: number): void;
     getDistanceFromCenterToSide(): number;
 }
+//# sourceMappingURL=sprite.d.ts.map

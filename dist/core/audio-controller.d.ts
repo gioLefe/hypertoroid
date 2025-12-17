@@ -1,4 +1,4 @@
-import { AudioPlayingOptions } from "./models/audio-playing-options";
+import { AudioPlayingOptions } from "./types/audio-playing-options";
 export declare class AudioController {
     static AUDIO_CONTROLLER_DI: string;
     private assetsManager;
@@ -11,3 +11,4 @@ export declare class AudioController {
     getMainVolume(): number;
     playAsset(id: string, audioPlayingOptions?: AudioPlayingOptions): void;
 }
+//# sourceMappingURL=audio-controller.d.ts.map

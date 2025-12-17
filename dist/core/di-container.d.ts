@@ -50,3 +50,4 @@ export declare class DIContainer {
      */
     resolve<T>(name: string): T;
 }
+//# sourceMappingURL=di-container.d.ts.map

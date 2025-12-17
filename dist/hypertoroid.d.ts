@@ -1,4 +1,6 @@
 export * from './core';
 export * from './helpers';
+export * from './mixins';
 export * from './models';
 export * from './ui';
+//# sourceMappingURL=hypertoroid.d.ts.map

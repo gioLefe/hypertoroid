@@ -1,77 +1,48 @@
-import { GameObject, Vec2, BoundingBox } from "../../models";
+import { BaseObject, BoundingBox, Size2 } from "../../models";
 import { FillStrokeStyle, getTextBBox } from "../canvas";
 
-export class UILabel extends GameObject<CanvasRenderingContext2D> {
-  override id: string | undefined;
+export class UILabel extends BaseObject {
+  id: string | undefined;
+  protected ctx: CanvasRenderingContext2D | undefined;
+  protected text: string | undefined;
+  protected textStyle: Partial<CanvasTextDrawingStyles> | undefined;
+  protected textFillStyle: FillStrokeStyle = "#000";
+  protected textStrokeStyle: FillStrokeStyle = "#000";
 
-  protected text: string;
-  private readonly DEFAULT_TEXT_STYLE: CanvasTextDrawingStyles = {
-    direction: "inherit",
-    font: "10px sans-serif",
-    fontKerning: "auto",
-    fontStretch: "normal",
-    fontVariantCaps: "normal",
-    letterSpacing: "normal",
-    textAlign: "start",
-    textBaseline: "alphabetic",
-    textRendering: "auto",
-    wordSpacing: "normal",
-  };
-  protected textStyle: CanvasTextDrawingStyles = this.DEFAULT_TEXT_STYLE;
-  protected textFillStyle: FillStrokeStyle | undefined = "#000";
-  protected textStrokeStyle: FillStrokeStyle | undefined = "#000";
-
-  constructor(
-    ctx: CanvasRenderingContext2D,
-    id: string,
-    posX?: number,
-    posY?: number,
-    textStyle?: Partial<CanvasTextDrawingStyles>,
-    text?: string
-  ) {
-    super(ctx);
-    this.id = id;
-    this.position = { x: posX ?? 0, y: posY ?? 0 };
-    if (textStyle !== undefined) {
-      this.textStyle = { ...this.textStyle, ...textStyle };
-    }
-    this.text = text ?? "";
+  constructor() {
+    super();
   }
 
-  override async init(...args: any) {
-    await super.init(...args);
-  }
-  override async update(deltaTime: number, ...args: any) {
-    super.update(deltaTime, args);
-    if (this.text === undefined || this.position === undefined) {
+  override async init() {}
+  override async update() {
+    if (this.text === undefined || this.ctx === undefined) {
       return;
     }
-    this.bbox = getTextBBox(this.ctx, this.text, this.position);
+    this.calcBBox();
   }
-  override render(...args: any) {
-    super.render(args);
-    if (this.position === undefined || this.text === undefined) {
+  override render() {
+    if (this.text === undefined || this.ctx === undefined) {
       return;
     }
 
     this.applyStyles();
 
-    this.ctx.moveTo(this.position?.x, this.position.y);
-    this.ctx.strokeText(this.text, this.position.x, this.position.y);
-    this.ctx.fillText(this.text, this.position.x, this.position.y);
+    this.ctx.moveTo(this.x, this.y);
+    this.ctx.strokeText(this.text, this.x, this.y);
+    this.ctx.fillText(this.text, this.x, this.y);
   }
-  override clean(...args: any) {
-    super.clean(args);
-  }
+  override clean() {}
 
   setText(text: string) {
     this.text = text;
   }
 
-  override getSize(): Vec2<number> | undefined {
+  override getSize(): Size2 | undefined {
     if (
       this.textFillStyle === undefined ||
-      this.textStrokeStyle === undefined
+      this.textStrokeStyle === undefined ||
+      this.text === undefined ||
+      this.ctx === undefined
     ) {
       return;
     }
@@ -83,13 +54,22 @@ export class UILabel extends GameObject<CanvasRenderingContext2D> {
       return undefined;
     }
     return {
-      x: textMetrics.width,
-      y:
+      width: textMetrics.width,
+      height:
         textMetrics?.fontBoundingBoxAscent + textMetrics.fontBoundingBoxDescent,
     };
   }
-  getBBox(): BoundingBox<number> {
-    return this.bbox;
+  override getBBox = (): BoundingBox<number> | undefined => {
+    if (!this.ctx) {
+      return undefined;
+    }
+    return getTextBBox(this.ctx, this.text ?? "", { x: this.x, y: this.y });
+  };
+  override calcBBox(): void {
+    if (this.text === undefined || this.ctx === undefined) {
+      return;
+    }
+    this.bbox = getTextBBox(this.ctx, this.text, { x: this.x, y: this.y });
   }
 
   setTextFillStyle(style: FillStrokeStyle) {
@@ -103,6 +83,9 @@ export class UILabel extends GameObject<CanvasRenderingContext2D> {
   }
 
   protected applyStyles() {
+    if (this.ctx === undefined) {
+      return;
+    }
     //TODO add direction
     this.ctx.font = this.textStyle?.font ?? "20px Verdana";
     //TODO addfontKerning

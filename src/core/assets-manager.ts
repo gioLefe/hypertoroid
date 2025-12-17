@@ -1,6 +1,6 @@
 import { ImageAsset, GenericFileAsset, SoundAsset, Tag } from "../models/asset";
-import { AssetsHandler } from "./models/assets-handler";
-import { GameAssetRequest } from "./models/game-asset";
+import { AssetsHandler } from "./types/assets-handler";
+import { GameAssetRequest } from "./types/game-asset";
 
 export class AssetsManager implements AssetsHandler {
   assets: Map<string, ImageAsset | SoundAsset | GenericFileAsset> = new Map();

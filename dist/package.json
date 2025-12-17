@@ -1,0 +1,6 @@
+{
+  "name": "hypertoroid",
+  "type": "module",
+  "main": "./hypertoroid.js",
+  "types": "./hypertoroid.d.ts"
+}

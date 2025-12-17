@@ -1,22 +1,24 @@
-import { GameObject, Vec2, BoundingBox } from "../../models";
+import { BaseObject, BoundingBox, Size2 } from "../../models";
 import { FillStrokeStyle } from "../canvas";
-export declare class UILabel extends GameObject<CanvasRenderingContext2D> {
+export declare class UILabel extends BaseObject {
     id: string | undefined;
-    protected text: string;
-    private readonly DEFAULT_TEXT_STYLE;
-    protected textStyle: CanvasTextDrawingStyles;
-    protected textFillStyle: FillStrokeStyle | undefined;
-    protected textStrokeStyle: FillStrokeStyle | undefined;
-    constructor(ctx: CanvasRenderingContext2D, id: string, posX?: number, posY?: number, textStyle?: Partial<CanvasTextDrawingStyles>, text?: string);
-    init(...args: any): Promise<void>;
-    update(deltaTime: number, ...args: any): Promise<void>;
-    render(...args: any): void;
-    clean(...args: any): void;
+    protected ctx: CanvasRenderingContext2D | undefined;
+    protected text: string | undefined;
+    protected textStyle: Partial<CanvasTextDrawingStyles> | undefined;
+    protected textFillStyle: FillStrokeStyle;
+    protected textStrokeStyle: FillStrokeStyle;
+    constructor();
+    init(): Promise<void>;
+    update(): Promise<void>;
+    render(): void;
+    clean(): void;
     setText(text: string): void;
-    getSize(): Vec2<number> | undefined;
-    getBBox(): BoundingBox<number>;
+    getSize(): Size2 | undefined;
+    getBBox: () => BoundingBox<number> | undefined;
+    calcBBox(): void;
     setTextFillStyle(style: FillStrokeStyle): void;
     setTextStrokeStyle(style: FillStrokeStyle): void;
     setTextStyle(textStyle: CanvasTextDrawingStyles): void;
     protected applyStyles(): void;
 }
+//# sourceMappingURL=label.d.ts.map

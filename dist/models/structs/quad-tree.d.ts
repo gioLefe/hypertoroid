@@ -12,3 +12,4 @@ export declare class QuadTree {
     subdivide(): void;
     queryRange(_range: BoundingBox<number>): Vec2<number>[] | undefined;
 }
+//# sourceMappingURL=quad-tree.d.ts.map

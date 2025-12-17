@@ -27,3 +27,4 @@ export declare class UIPanel extends GameObject<CanvasRenderingContext2D> {
     setStrokeStyle(value: FillStrokeStyle): void;
     private calcContentHeight;
 }
+//# sourceMappingURL=panel.d.ts.map

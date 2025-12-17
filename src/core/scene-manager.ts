@@ -1,5 +1,5 @@
 import { CanvasScene2D } from "../models/canvas-scene";
-import { SceneHandler } from "./models/scene-handler";
+import { SceneHandler } from "./types/scene-handler";
 
 export class SceneManager implements SceneHandler {
   private currentScenes: CanvasScene2D[] = [];

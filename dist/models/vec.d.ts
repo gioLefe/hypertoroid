@@ -5,3 +5,4 @@ export type Vec2<T> = {
 export type Vec3<T> = Vec2<T> & {
     z: T;
 };
+//# sourceMappingURL=vec.d.ts.map

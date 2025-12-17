@@ -4,3 +4,4 @@ export interface GameCycle {
     render(...args: any): any;
     clean(...args: any): any;
 }
+//# sourceMappingURL=game-cycle.d.ts.map

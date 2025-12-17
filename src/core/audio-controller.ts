@@ -2,7 +2,7 @@ import { SoundAsset } from "../models/asset";
 import { ASSETS_MANAGER_DI } from "../models/game";
 import { AssetsManager } from "./assets-manager";
 import { DIContainer } from "./di-container";
-import { AudioPlayingOptions } from "./models/audio-playing-options";
+import { AudioPlayingOptions } from "./types/audio-playing-options";
 
 const MAX_VOLUME = 1;
 

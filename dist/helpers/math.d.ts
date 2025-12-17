@@ -34,3 +34,4 @@ export declare function magnitude(v: Vec2<number>): number;
 export declare function projectPolygonToAxis(vertices: Vec2<number>[], axis: Vec2<number>): MinMax;
 export declare function angleBetween(v1: Vec2<number>, v2: Vec2<number>, tolerance?: number): number;
 export declare function randomIntFromInterval(min: number, max: number): number;
+//# sourceMappingURL=math.d.ts.map

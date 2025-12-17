@@ -6,7 +6,7 @@ import {
   AudioController,
   AssetsManager,
 } from "../core";
-import { AssetsHandler } from "../core/models/assets-handler";
+import { AssetsHandler } from "../core/types/assets-handler";
 import { GameCycle } from "./game-cycle";
 
 export const SCENE_MANAGER_DI = "SceneManager";
@@ -19,7 +19,7 @@ export abstract class Game implements GameCycle {
   private lastUpdateTime: number = 0;
   private deltaTime: number = 0;
   private frameInterval: number = 0;
-  private diContainer = DIContainer.getInstance();
+  protected diContainer = DIContainer.getInstance();
 
   protected sceneManager: SceneHandler | undefined;
   protected assetsManager: AssetsHandler | undefined;
@@ -100,9 +100,20 @@ export abstract class Game implements GameCycle {
       console.warn("no scene to update");
       return;
     }
-    await Promise.allSettled(
-      currentScenes.map((scene) => scene.update(deltaTime))
-    );
+    try {
+      const results = await Promise.allSettled(
+        currentScenes.map((scene) => scene.update(deltaTime))
+      );
+
+      // Log any rejected promises for debugging
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`Scene ${index} update failed:`, result.reason);
+        }
+      });
+    } catch (error) {
+      console.error("Critical error in update loop:", error);
+    }
   }
 
   render(..._args: any): void {
@@ -121,15 +132,21 @@ export abstract class Game implements GameCycle {
   }
 
   gameLoop = async (timestamp: number): Promise<void> => {
-    const elapsed = timestamp - this.lastUpdateTime;
-    if (elapsed > this.frameInterval) {
-      this.deltaTime = elapsed / 1000; // Convert to
+    if (this.lastUpdateTime === 0) {
       this.lastUpdateTime = timestamp;
+    }
+
+    const elapsed = timestamp - this.lastUpdateTime;
+
+    if (elapsed > this.frameInterval) {
+      this.deltaTime = this.frameInterval / 1000;
+
+      // Account for frame timing drift
+      this.lastUpdateTime = timestamp - (elapsed % this.frameInterval);
 
       await this.update(this.deltaTime);
       this.render(this.ctx);
     }
-
     requestAnimationFrame(this.gameLoop);
   };
 

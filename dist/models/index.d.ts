@@ -1,7 +1,9 @@
 export * from "./anonymous-class";
 export * from "./asset";
+export * from "./base-object";
 export * from "./bbox";
 export * from "./canvas-scene";
+export * from "./color";
 export * from "./game";
 export * from "./game-cycle";
 export * from "./game-object";
@@ -13,3 +15,4 @@ export * from "./structs";
 export * from "./unit-vector";
 export * from "./vec";
 export * from "./size";
+//# sourceMappingURL=index.d.ts.map

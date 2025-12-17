@@ -20,3 +20,4 @@ export declare class LinkedList<T> implements ILinkedList<T> {
     traverse(): T[];
     size(): number;
 }
+//# sourceMappingURL=linked-list.d.ts.map

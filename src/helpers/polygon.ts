@@ -22,7 +22,7 @@ const DEFAULT_POLYGON_PARAMS: RenderingPolygonParams = {
 export function renderPolygon(
   polygon: Polygon,
   ctx: CanvasRenderingContext2D,
-  options: RenderingPolygonParams = DEFAULT_POLYGON_PARAMS,
+  options: RenderingPolygonParams = DEFAULT_POLYGON_PARAMS
 ): void {
   if (!polygon) {
     console.error("Polygon is null");
@@ -50,7 +50,7 @@ export function renderPolygon(
   for (let i = 1; i < polygon.points.length; i++) {
     ctx.lineTo(
       options.worldCoordinates.x + polygon.points[i].x,
-      options.worldCoordinates.y + +polygon.points[i].y,
+      options.worldCoordinates.y + +polygon.points[i].y
     );
   }
   ctx.lineTo(origin.x, origin.y);
@@ -65,7 +65,7 @@ export function renderPolygon(
 
 export function createTriangle(
   height: number,
-  color: string = "#ffb3ba",
+  color: string = "#ffb3ba"
 ): Polygon | null {
   if (height === 0) {
     console.warn("height cannot be 0");
@@ -85,7 +85,7 @@ export function createTriangle(
 
 export function createSquare(
   sideLength: number,
-  color: string = "#ffb3ba",
+  color: string = "#ffb3ba"
 ): Polygon | null {
   if (sideLength === 0) {
     console.warn("sideLength cannot be 0");
@@ -112,7 +112,7 @@ export function createPolygon(defaults: Partial<Polygon> = {}): Polygon {
     numSides: defaults.numSides ?? 3,
     points: generatePolygonPoints(
       defaults.numSides ?? 3,
-      defaults.sideLength ?? 10,
+      defaults.sideLength ?? 10
     ),
     sideLength: defaults.sideLength ?? 22,
   } as Polygon;
@@ -131,7 +131,7 @@ export function rotatePolygon(polygon: Polygon, radiants: number): Polygon {
     points: generatePolygonPoints(
       polygon.numSides,
       polygon.sideLength,
-      radiants,
+      radiants
     ),
   };
 }
@@ -142,17 +142,17 @@ export function calculateNormals(points: Vec2<number>[]): Vec2<number>[] {
       return accumulation.some(
         (n) =>
           Math.abs(n.y) === Math.abs(current.y) &&
-          Math.abs(n.x) === Math.abs(current.x),
+          Math.abs(n.x) === Math.abs(current.x)
       )
         ? accumulation
         : accumulation.concat(current);
     },
-    [],
+    []
   );
 }
 
 export function calculateEdgesPerpendiculars(
-  points: Vec2<number>[],
+  points: Vec2<number>[]
 ): Vec2<number>[] {
   const perpendiculars: Vec2<number>[] = [];
 
@@ -174,7 +174,7 @@ export function calculateEdgesPerpendiculars(
       console.warn(
         `%c *** Cannot calculate perpendicular for edge`,
         `background:#222; color: #FFda55`,
-        edge,
+        edge
       );
       continue;
     }
@@ -182,7 +182,7 @@ export function calculateEdgesPerpendiculars(
     // Normalize the perpendicular axis
     const length = Math.sqrt(
       perpendicularAxis.x * perpendicularAxis.x +
-        perpendicularAxis.y * perpendicularAxis.y,
+        perpendicularAxis.y * perpendicularAxis.y
     );
     perpendicularAxis.x /= length;
     perpendicularAxis.y /= length;
@@ -195,7 +195,7 @@ export function calculateEdgesPerpendiculars(
 
 export function getBBoxRect(
   buondingBox: BoundingBox<number>,
-  defaults: Partial<Polygon> = {},
+  defaults: Partial<Polygon> = {}
 ): Polygon {
   return {
     color: defaults.color ?? "#ffb3ba",
@@ -213,7 +213,7 @@ export function getBBoxRect(
 
 export function getWorldPolygon(
   polygon: Polygon,
-  position: Vec2<number>,
+  position: Vec2<number>
 ): WorldPolygon {
   return {
     ...polygon,
@@ -223,17 +223,26 @@ export function getWorldPolygon(
 
 export function printWorldPolygonInfo(
   polygon: WorldPolygon,
-  label = "polygon",
+  label = "polygon"
 ) {
   console.log(
-    `${label}: sides: ${polygon.numSides} | center: x:${polygon?.worldCoordinates.x.toFixed(1)}, y:${polygon?.worldCoordinates.y.toFixed(1)} | points: ${polygon.points.forEach((p, i) => `p[${i}]-${p.x}:${p.y},`)} | normals: ${polygon.normals?.forEach((n, i) => `n[${i}]-${n.x}:${n.y},`)}`,
+    `${label}: sides: ${polygon.numSides} | center: x:${polygon?.worldCoordinates.x.toFixed(1)}, y:${polygon?.worldCoordinates.y.toFixed(1)} | points: ${polygon.points.forEach((p, i) => `p[${i}]-${p.x}:${p.y},`)} | normals: ${polygon.normals?.forEach((n, i) => `n[${i}]-${n.x}:${n.y},`)}`
   );
+}
+
+export function createBoundingBox(
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): BoundingBox<number> {
+  return { nw: { x, y }, se: { x: x + width, y: y + height } };
 }
 
 function generatePolygonPoints(
   numSides: number,
   sideLength: number,
-  radiants?: number,
+  radiants?: number
 ): Vec2<number>[] {
   const points: Vec2<number>[] = [];
   let fullCircle = 2 * Math.PI;

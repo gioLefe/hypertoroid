@@ -11,3 +11,4 @@ export type GenericFileAsset = {
     source: any;
     tags: Tag[];
 };
+//# sourceMappingURL=asset.d.ts.map

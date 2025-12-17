@@ -1,5 +1,5 @@
-import { SceneHandler, Settings } from "../core";
-import { AssetsHandler } from "../core/models/assets-handler";
+import { DIContainer, SceneHandler, Settings } from "../core";
+import { AssetsHandler } from "../core/types/assets-handler";
 import { GameCycle } from "./game-cycle";
 export declare const SCENE_MANAGER_DI = "SceneManager";
 export declare const ASSETS_MANAGER_DI = "AsetsManager";
@@ -9,7 +9,7 @@ export declare abstract class Game implements GameCycle {
     private lastUpdateTime;
     private deltaTime;
     private frameInterval;
-    private diContainer;
+    protected diContainer: DIContainer;
     protected sceneManager: SceneHandler | undefined;
     protected assetsManager: AssetsHandler | undefined;
     protected settingsManager: Settings | undefined;
@@ -22,3 +22,4 @@ export declare abstract class Game implements GameCycle {
     gameLoop: (timestamp: number) => Promise<void>;
     start(): void;
 }
+//# sourceMappingURL=game.d.ts.map

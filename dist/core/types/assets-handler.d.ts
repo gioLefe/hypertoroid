@@ -10,3 +10,4 @@ export interface AssetsHandler {
     updateId(oldId: string, newId: string): void;
     getImageData(assetId: string): ImageData | null;
 }
+//# sourceMappingURL=assets-handler.d.ts.map

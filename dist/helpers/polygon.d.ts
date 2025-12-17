@@ -19,3 +19,5 @@ export declare function calculateEdgesPerpendiculars(points: Vec2<number>[]): Ve
 export declare function getBBoxRect(buondingBox: BoundingBox<number>, defaults?: Partial<Polygon>): Polygon;
 export declare function getWorldPolygon(polygon: Polygon, position: Vec2<number>): WorldPolygon;
 export declare function printWorldPolygonInfo(polygon: WorldPolygon, label?: string): void;
+export declare function createBoundingBox(x: number, y: number, width: number, height: number): BoundingBox<number>;
+//# sourceMappingURL=polygon.d.ts.map

@@ -1,6 +1,6 @@
 import { ImageAsset, GenericFileAsset, SoundAsset, Tag } from "../models/asset";
-import { AssetsHandler } from "./models/assets-handler";
-import { GameAssetRequest } from "./models/game-asset";
+import { AssetsHandler } from "./types/assets-handler";
+import { GameAssetRequest } from "./types/game-asset";
 export declare class AssetsManager implements AssetsHandler {
     assets: Map<string, ImageAsset | SoundAsset | GenericFileAsset>;
     add(assetRequests: GameAssetRequest[]): Promise<void>[];
@@ -17,3 +17,4 @@ export declare class AssetsManager implements AssetsHandler {
     getImageData(assetId: string): ImageData | null;
     private createObjectPromise;
 }
+//# sourceMappingURL=assets-manager.d.ts.map

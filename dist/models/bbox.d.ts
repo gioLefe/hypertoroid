@@ -3,3 +3,4 @@ export type BoundingBox<T> = {
     nw: Vec2<T>;
     se: Vec2<T>;
 };
+//# sourceMappingURL=bbox.d.ts.map

@@ -4,3 +4,4 @@ export type UnitVector = {
     direction: number;
 };
 export declare function pivotComparator(p1: UnitVector, p2: UnitVector): boolean;
+//# sourceMappingURL=unit-vector.d.ts.map

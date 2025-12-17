@@ -6,3 +6,4 @@ export declare class Settings {
     get<T extends unknown>(key: string): T | undefined;
     set<T extends unknown>(key: string, value: T): void;
 }
+//# sourceMappingURL=settings.d.ts.map

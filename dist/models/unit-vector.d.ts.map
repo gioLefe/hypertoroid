@@ -1,0 +1,1 @@
+{"version":3,"file":"unit-vector.d.ts","sourceRoot":"","sources":["../../src/models/unit-vector.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAE,MAAM,OAAO,CAAC;AAE7B,MAAM,MAAM,UAAU,GAAG;IACvB,QAAQ,EAAE,IAAI,CAAC,MAAM,CAAC,CAAC;IACvB,SAAS,EAAE,MAAM,CAAC;CACnB,CAAC;AAEF,wBAAgB,eAAe,CAAC,EAAE,EAAE,UAAU,EAAE,EAAE,EAAE,UAAU,WAM7D"}

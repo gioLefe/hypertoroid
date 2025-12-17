@@ -8,3 +8,4 @@ export type Polygon = {
     outline?: boolean;
     normals?: Vec2<number>[];
 };
+//# sourceMappingURL=polygon.d.ts.map

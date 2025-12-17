@@ -1,0 +1,1 @@
+{"version":3,"file":"sat-collision.d.ts","sourceRoot":"","sources":["../../src/helpers/sat-collision.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,OAAO,EAAE,IAAI,EAAE,MAAM,WAAW,CAAC;AAE1C,mDAAmD;AACnD,MAAM,MAAM,YAAY,GAAG,OAAO,GAAG;IACnC,gBAAgB,EAAE,IAAI,CAAC,MAAM,CAAC,CAAC;CAChC,CAAC;AAEF,wBAAgB,YAAY,CAC1B,QAAQ,EAAE,YAAY,EACtB,QAAQ,EAAE,YAAY,GACrB,OAAO,CAgCT"}

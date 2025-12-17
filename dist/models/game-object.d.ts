@@ -25,3 +25,4 @@ export declare abstract class GameObject<T = GraphicContext> implements GameCycl
     getHeight(): number;
     setHeight(height: number): void;
 }
+//# sourceMappingURL=game-object.d.ts.map

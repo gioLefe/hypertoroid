@@ -2,136 +2,6 @@ var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
-// src/core/di-container.ts
-var _DIContainer = class _DIContainer {
-  /**
-   * Private constructor to prevent direct instantiation.
-   * Use {@link DIContainer.getInstance} to get the single instance of this class.
-   * @private
-   */
-  constructor() {
-    /**
-     * A map to store registered dependencies.
-     * @type {Map<string, any>}
-     * @private
-     */
-    __publicField(this, "dependencies", /* @__PURE__ */ new Map());
-  }
-  /**
-   * Gets the single instance of the DIContainer.
-   * If no instance exists, it creates one.
-   *
-   * @returns {DIContainer} The singleton instance of the DIContainer.
-   * @static
-   */
-  static getInstance() {
-    if (!_DIContainer.instance) {
-      _DIContainer.instance = new _DIContainer();
-    }
-    return _DIContainer.instance;
-  }
-  /**
-   * Registers a dependency with a specific name.
-   *
-   * @template T
-   * @param {string} name - The name of the dependency.
-   * @param {T} dependency - The dependency to register.
-   * @returns {void}
-   */
-  register(name, dependency) {
-    this.dependencies.set(name, dependency);
-  }
-  /**
-   * Resolves a dependency by its name.
-   * Throws an error if the dependency is not found.
-   *
-   * @template T
-   * @param {string} name - The name of the dependency to resolve.
-   * @returns {T} The resolved dependency.
-   * @throws {Error} If the dependency is not found.
-   */
-  resolve(name) {
-    const dependency = this.dependencies.get(name);
-    if (!dependency) {
-      throw new Error(`Dependency ${name} not found`);
-    }
-    return dependency;
-  }
-};
-/**
- * The single instance of the DIContainer.
- * @type {DIContainer}
- * @private
- * @static
- */
-__publicField(_DIContainer, "instance");
-var DIContainer = _DIContainer;
-
-// src/core/scene-manager.ts
-var SceneManager = class {
-  constructor() {
-    __publicField(this, "currentScenes", []);
-    __publicField(this, "scenes", []);
-  }
-  addScene(scene) {
-    if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
-      console.warn("Scene with same id already exists, provide a new id");
-      return;
-    }
-    this.scenes.push(scene);
-  }
-  deleteScene(id) {
-    const i = this.getSceneIndex(id, this.currentScenes);
-    this.currentScenes[i].clean();
-    this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
-  }
-  getCurrentScenes() {
-    return this.currentScenes;
-  }
-  /**
-   * Changes the current scene to a new scene specified by the given ID.
-   *
-   * This function initializes the new scene, optionally initializes a loading scene, and updates
-   * the current scenes stack. It also handles cleaning up the previous scene state if specified.
-   *
-   * @param {string} id - The ID of the new scene to transition to.
-   * @param {boolean} [cleanPreviousState=true] - A flag indicating whether to clean up the previous scene state.
-   * @param {string} [loadingSceneId] - The ID of an optional loading scene to display while the new scene is initializing.
-   * @returns {Promise<void>} A promise that resolves when the scene transition is complete.
-   */
-  async changeScene(id, cleanPreviousState = true, loadingSceneId) {
-    const lastCurrentSceneId = this.currentScenes[this.currentScenes.length - 1]?.id;
-    const newScene = this.scenes[this.getSceneIndex(id, this.scenes)];
-    if (loadingSceneId !== void 0) {
-      const loadingSceneIndex = this.getSceneIndex(loadingSceneId, this.scenes);
-      let loadingScene = this.scenes[loadingSceneIndex];
-      const loadingSceneInitPromises = loadingScene.init();
-      if (loadingSceneInitPromises !== void 0) {
-        await loadingSceneInitPromises;
-      }
-      this.currentScenes.push(loadingScene);
-    }
-    const newSceneInitPromises = newScene.init();
-    if (newSceneInitPromises !== void 0) {
-      await newSceneInitPromises;
-    }
-    if (cleanPreviousState && lastCurrentSceneId !== void 0) {
-      this.deleteScene(lastCurrentSceneId);
-    }
-    if (loadingSceneId !== void 0) {
-      this.deleteScene(loadingSceneId);
-    }
-    this.currentScenes.push(newScene);
-  }
-  getSceneIndex(id, scenes) {
-    const loadingSceneIndex = scenes.findIndex((s) => s.id === id);
-    if (loadingSceneIndex === -1) {
-      throw new Error(`cannot find scene with id ${id}`);
-    }
-    return loadingSceneIndex;
-  }
-};
-
 // src/core/assets-manager.ts
 var AssetsManager = class {
   constructor() {
@@ -274,10 +144,13 @@ var Game = class {
       render: false
     });
     __publicField(this, "gameLoop", async (timestamp) => {
+      if (this.lastUpdateTime === 0) {
+        this.lastUpdateTime = timestamp;
+      }
       const elapsed = timestamp - this.lastUpdateTime;
       if (elapsed > this.frameInterval) {
-        this.deltaTime = elapsed / 1e3;
-        this.lastUpdateTime = timestamp;
+        this.deltaTime = this.frameInterval / 1e3;
+        this.lastUpdateTime = timestamp - elapsed % this.frameInterval;
         await this.update(this.deltaTime);
         this.render(this.ctx);
       }
@@ -336,9 +209,18 @@ var Game = class {
       console.warn("no scene to update");
       return;
     }
-    await Promise.allSettled(
-      currentScenes.map((scene) => scene.update(deltaTime))
-    );
+    try {
+      const results = await Promise.allSettled(
+        currentScenes.map((scene) => scene.update(deltaTime))
+      );
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`Scene ${index} update failed:`, result.reason);
+        }
+      });
+    } catch (error) {
+      console.error("Critical error in update loop:", error);
+    }
   }
   render(..._args) {
     if (this.debug.render) {
@@ -357,6 +239,71 @@ var Game = class {
     this.gameLoop(this.lastUpdateTime);
   }
 };
+
+// src/core/di-container.ts
+var _DIContainer = class _DIContainer {
+  /**
+   * Private constructor to prevent direct instantiation.
+   * Use {@link DIContainer.getInstance} to get the single instance of this class.
+   * @private
+   */
+  constructor() {
+    /**
+     * A map to store registered dependencies.
+     * @type {Map<string, any>}
+     * @private
+     */
+    __publicField(this, "dependencies", /* @__PURE__ */ new Map());
+  }
+  /**
+   * Gets the single instance of the DIContainer.
+   * If no instance exists, it creates one.
+   *
+   * @returns {DIContainer} The singleton instance of the DIContainer.
+   * @static
+   */
+  static getInstance() {
+    if (!_DIContainer.instance) {
+      _DIContainer.instance = new _DIContainer();
+    }
+    return _DIContainer.instance;
+  }
+  /**
+   * Registers a dependency with a specific name.
+   *
+   * @template T
+   * @param {string} name - The name of the dependency.
+   * @param {T} dependency - The dependency to register.
+   * @returns {void}
+   */
+  register(name, dependency) {
+    this.dependencies.set(name, dependency);
+  }
+  /**
+   * Resolves a dependency by its name.
+   * Throws an error if the dependency is not found.
+   *
+   * @template T
+   * @param {string} name - The name of the dependency to resolve.
+   * @returns {T} The resolved dependency.
+   * @throws {Error} If the dependency is not found.
+   */
+  resolve(name) {
+    const dependency = this.dependencies.get(name);
+    if (!dependency) {
+      throw new Error(`Dependency ${name} not found`);
+    }
+    return dependency;
+  }
+};
+/**
+ * The single instance of the DIContainer.
+ * @type {DIContainer}
+ * @private
+ * @static
+ */
+__publicField(_DIContainer, "instance");
+var DIContainer = _DIContainer;
 
 // src/core/audio-controller.ts
 var MAX_VOLUME = 1;
@@ -409,25 +356,6 @@ var AudioController = class {
   }
 };
 __publicField(AudioController, "AUDIO_CONTROLLER_DI", "AudioController");
-
-// src/core/settings.ts
-var CANVAS_WIDTH = "canvasW";
-var CANVAS_HEIGHT = "canvasH";
-var Settings = class {
-  constructor() {
-    __publicField(this, "settings", /* @__PURE__ */ new Map());
-  }
-  get(key) {
-    if (!this.settings.has(key)) {
-      return void 0;
-    }
-    return this.settings.get(key);
-  }
-  set(key, value) {
-    this.settings = this.settings.set(key, value);
-  }
-};
-__publicField(Settings, "SETTINGS_DI", "settings");
 
 // src/helpers/canvas.ts
 function drawRotated(ctx, canvasW, canvasH, img, degrees) {
@@ -669,6 +597,9 @@ function printWorldPolygonInfo(polygon, label = "polygon") {
     `${label}: sides: ${polygon.numSides} | center: x:${polygon?.worldCoordinates.x.toFixed(1)}, y:${polygon?.worldCoordinates.y.toFixed(1)} | points: ${polygon.points.forEach((p, i) => `p[${i}]-${p.x}:${p.y},`)} | normals: ${polygon.normals?.forEach((n, i) => `n[${i}]-${n.x}:${n.y},`)}`
   );
 }
+function createBoundingBox(x, y, width, height) {
+  return { nw: { x, y }, se: { x: x + width, y: y + height } };
+}
 function generatePolygonPoints(numSides, sideLength, radiants) {
   const points = [];
   let fullCircle = 2 * Math.PI;
@@ -718,6 +649,510 @@ function satCollision(polygonA, polygonB) {
   }
   return true;
 }
+
+// src/models/color.ts
+var RED = { r: 255, g: 0, b: 0, a: 255 };
+var GREEN = { r: 0, g: 255, b: 0, a: 255 };
+var BLUE = { r: 0, g: 0, b: 255, a: 255 };
+var YELLOW = { r: 255, g: 255, b: 0, a: 255 };
+function isSameColor(color, colorToCompare) {
+  return color.r === colorToCompare.r && color.g === colorToCompare.g && color.b === colorToCompare.b && color.a === colorToCompare.a;
+}
+function colorToString(color) {
+  return `rgba(${color.r},${color.g},${color.b},${color.a})`;
+}
+function getCtxPixelColor(x, y, ctx) {
+  const pixelBuffer = new Uint8ClampedArray(4);
+  ctx.getImageData(x, y, 1, 1).data.forEach((v, i) => {
+    pixelBuffer[i] = v;
+  });
+  if (pixelBuffer === void 0) {
+    throw new Error("Failed to get pixel data");
+  }
+  return {
+    r: pixelBuffer[0],
+    g: pixelBuffer[1],
+    b: pixelBuffer[2],
+    a: pixelBuffer[3]
+  };
+}
+function colorize(image, r, g, b) {
+  const imageSize = image.width;
+  const offscreen = new OffscreenCanvas(imageSize, imageSize);
+  const ctx = offscreen.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, imageSize, imageSize);
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    imageData.data[i + 0] *= r;
+    imageData.data[i + 1] *= g;
+    imageData.data[i + 2] *= b;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return offscreen;
+}
+
+// src/core/interaction-manager.ts
+var InteractionManager = class {
+  constructor(canvas) {
+    __publicField(this, "canvas");
+    __publicField(this, "hitboxEvents", /* @__PURE__ */ new Map());
+    __publicField(this, "hitboxArray", null);
+    __publicField(this, "hitBoxCanvas", new OffscreenCanvas(0, 0));
+    __publicField(this, "hitBoxOffscreenCtx", this.hitBoxCanvas.getContext("2d", { willReadFrequently: true }));
+    __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
+    __publicField(this, "keyboardFocusId", null);
+    __publicField(this, "mouseMoveTargetId", null);
+    __publicField(this, "mouseOutCallback", null);
+    __publicField(this, "mouseDownTargetId", null);
+    __publicField(this, "mouseUpCallback", null);
+    __publicField(this, "listener", (htmlEv) => {
+      const evType = htmlEv.type;
+      if (evType.indexOf("key") === 0) {
+        if (this.keyboardFocusId) {
+          const focused = this.hitboxEvents.get(this.keyboardFocusId);
+          const callback2 = focused?.callbacks?.[evType];
+          if (callback2) {
+            callback2(htmlEv);
+          }
+          return;
+        }
+        const canvasHitBox = this.getCanvasEvent(evType);
+        if (canvasHitBox) {
+          canvasHitBox.callbacks?.[evType]?.(htmlEv);
+        }
+      }
+      const point = this.extractPoint(htmlEv);
+      if (!point) return;
+      let hitBoxEvent = this.getHitboxAt(point);
+      if (!hitBoxEvent) {
+        hitBoxEvent = this.getCanvasEvent(evType);
+      }
+      if (!hitBoxEvent) return;
+      const callback = hitBoxEvent.callbacks?.[evType];
+      if (callback) {
+        callback(htmlEv);
+      }
+      this.handleMouseButtonRelease(htmlEv, evType, hitBoxEvent);
+      this.handleMouseOut(htmlEv, evType, hitBoxEvent);
+    });
+    /** Handle mouse button release across different hitboxes.
+     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
+     * the original hitbox's mouseup callback is still invoked.
+     */
+    __publicField(this, "handleMouseButtonRelease", (htmlEv, evType, hitBoxEvent) => {
+      if (evType === "mousedown" && this.mouseUpCallback === null) {
+        this.mouseUpCallback = hitBoxEvent.callbacks?.["mouseup"] || null;
+        this.mouseDownTargetId = hitBoxEvent.id || null;
+      }
+      if (evType === "mouseup" && this.mouseUpCallback) {
+        if (this.mouseDownTargetId !== hitBoxEvent.id) {
+          this.mouseUpCallback(htmlEv);
+          this.mouseDownTargetId = null;
+          this.mouseUpCallback = null;
+        }
+      }
+    });
+    /** Handle mouse hover and mouseout across different hitboxes.
+     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
+     * the original hitbox's mouseup callback is still invoked.
+     */
+    __publicField(this, "handleMouseOut", (htmlEv, evType, hitBoxEvent) => {
+      if (evType === "mousemove" && this.mouseOutCallback === null) {
+        this.mouseOutCallback = hitBoxEvent.callbacks?.["mouseout"] || null;
+        this.mouseMoveTargetId = hitBoxEvent.id || null;
+      }
+      if (evType === "mousemove" && this.mouseOutCallback) {
+        if (this.mouseMoveTargetId !== hitBoxEvent.id) {
+          this.mouseOutCallback(htmlEv);
+          this.mouseMoveTargetId = null;
+          this.mouseOutCallback = null;
+        }
+      }
+    });
+    this.canvas = canvas;
+    this.updateCanvasSize(canvas.width, canvas.height);
+  }
+  registerEventListener(evType, options) {
+    this.canvas.addEventListener(evType, this.listener, options);
+  }
+  /**
+   * Query the highest-priority hitbox at a point.
+   * Returns undefined if no hitbox matches.
+   */
+  getHitboxAt(point) {
+    const candidates = this.getHitboxArray().filter(
+      (hb) => this.hitTest(hb, point)
+    );
+    if (candidates.length === 0) return void 0;
+    return candidates.sort((a, b) => (b.layer ?? 0) - (a.layer ?? 0))[0];
+  }
+  updateCanvasSize(width, height) {
+    this.hitBoxCanvas.width = width;
+    this.hitBoxCanvas.height = height;
+  }
+  registerKeyboardFocus(id) {
+    this.keyboardFocusId = id;
+  }
+  deregisterKeyboardFocus() {
+    this.keyboardFocusId = null;
+  }
+  // CRUD
+  upsertHitbox(id, options) {
+    const existing = this.hitboxEvents.get(id);
+    this.hitboxEvents.set(id, {
+      id,
+      layer: options.layer ?? existing?.layer ?? 0,
+      boundingBox: options.boundingBox ?? existing?.boundingBox,
+      hitTest: options.hitTest ?? existing?.hitTest,
+      color: options.color ?? existing?.color,
+      image: options.image ?? existing?.image,
+      callbacks: options.callbacks ?? existing?.callbacks
+    });
+    this.hitboxArray = null;
+  }
+  removeHitbox(id) {
+    this.hitboxEvents.delete(id);
+    this.hitboxArray = null;
+  }
+  hasHitBox(hbId) {
+    return this.hitboxEvents.has(hbId);
+  }
+  /**
+   * Renders hitboxes to the offscreen canvas, sorted by layer priority.
+   * This offscreen canvas is used by hitTest() for pixel-perfect collision detection.
+   * Higher layer values are rendered last (on top), ensuring they win priority queries.
+   */
+  render(ctx = this.hitBoxOffscreenCtx) {
+    if (!ctx) return;
+    ctx.clearRect(0, 0, this.hitBoxCanvas.width, this.hitBoxCanvas.height);
+    const sortedByLayer = this.getHitboxArray().sort(
+      (a, b) => (a.layer ?? 0) - (b.layer ?? 0)
+    );
+    for (const hitboxEvent of sortedByLayer) {
+      const bbox = hitboxEvent.boundingBox?.();
+      if (!bbox || !hitboxEvent.color) continue;
+      if (hitboxEvent.image) {
+        const colorized = this.colorizeCached(
+          hitboxEvent.image,
+          hitboxEvent.color
+        );
+        ctx.drawImage(colorized, bbox.nw.x, bbox.nw.y);
+        continue;
+      }
+      const colorString = colorToString(hitboxEvent.color);
+      ctx.fillStyle = colorString;
+      ctx.strokeStyle = colorString;
+      ctx.fillRect(
+        bbox.nw.x,
+        bbox.nw.y,
+        bbox.se.x - bbox.nw.x,
+        bbox.se.y - bbox.nw.y
+      );
+    }
+  }
+  clean(evTypes) {
+    for (const evType of evTypes) {
+      this.canvas.removeEventListener(evType, this.listener);
+    }
+    this.hitboxEvents.clear();
+    this.hitboxArray = null;
+  }
+  extractPoint(ev) {
+    if ("offsetX" in ev && "offsetY" in ev) {
+      return { x: ev.offsetX, y: ev.offsetY };
+    }
+    return null;
+  }
+  hitTest(hitboxEvent, point) {
+    if (hitboxEvent.boundingBox) {
+      const bbox = hitboxEvent.boundingBox();
+      if (!bbox || !isPointInAlignedBBox(point, bbox)) {
+        return false;
+      }
+    }
+    if (hitboxEvent.hitTest) {
+      return hitboxEvent.hitTest(point, this.hitBoxOffscreenCtx);
+    }
+    if (hitboxEvent.color) {
+      const pixel = getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx);
+      return isSameColor(pixel, hitboxEvent.color);
+    }
+    return hitboxEvent.boundingBox !== void 0;
+  }
+  colorizeCached(image, color) {
+    const key = `${image.src}:${color.r},${color.g},${color.b},${color.a}`;
+    let cached = this.colorizedCache.get(key);
+    if (!cached) {
+      cached = colorize(image, color.r, color.g, color.b);
+      this.colorizedCache.set(key, cached);
+    }
+    return cached;
+  }
+  getHitboxArray() {
+    if (!this.hitboxArray) {
+      this.hitboxArray = Array.from(this.hitboxEvents.values());
+    }
+    return this.hitboxArray;
+  }
+  getCanvasEvent(evType) {
+    if (!this.hitboxArray) {
+      return void 0;
+    }
+    return this.hitboxArray?.find((hb) => {
+      return hb.boundingBox === void 0 && hb.hitTest === void 0 && hb.color === void 0 && hb.image === void 0 && hb.callbacks?.[evType];
+    });
+  }
+  /**
+   * Query all hitboxes at a point, sorted by priority (highest first).
+   */
+  // getHitboxesAt(point: Vec2<number>): HitboxEvent[] {
+  //   return this.getHitboxArray()
+  //     .filter((hb) => this.hitTest(hb, point))
+  //     .sort((a, b) => (b.layer ?? 0) - (a.layer ?? 0));
+  // }
+};
+__publicField(InteractionManager, "INTERACTION_MANAGER_ID", "InteractionManager");
+
+// src/core/scene-manager.ts
+var SceneManager = class {
+  constructor() {
+    __publicField(this, "currentScenes", []);
+    __publicField(this, "scenes", []);
+  }
+  addScene(scene) {
+    if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
+      console.warn("Scene with same id already exists, provide a new id");
+      return;
+    }
+    this.scenes.push(scene);
+  }
+  deleteScene(id) {
+    const i = this.getSceneIndex(id, this.currentScenes);
+    this.currentScenes[i].clean();
+    this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
+  }
+  getCurrentScenes() {
+    return this.currentScenes;
+  }
+  /**
+   * Changes the current scene to a new scene specified by the given ID.
+   *
+   * This function initializes the new scene, optionally initializes a loading scene, and updates
+   * the current scenes stack. It also handles cleaning up the previous scene state if specified.
+   *
+   * @param {string} id - The ID of the new scene to transition to.
+   * @param {boolean} [cleanPreviousState=true] - A flag indicating whether to clean up the previous scene state.
+   * @param {string} [loadingSceneId] - The ID of an optional loading scene to display while the new scene is initializing.
+   * @returns {Promise<void>} A promise that resolves when the scene transition is complete.
+   */
+  async changeScene(id, cleanPreviousState = true, loadingSceneId) {
+    const lastCurrentSceneId = this.currentScenes[this.currentScenes.length - 1]?.id;
+    const newScene = this.scenes[this.getSceneIndex(id, this.scenes)];
+    if (loadingSceneId !== void 0) {
+      const loadingSceneIndex = this.getSceneIndex(loadingSceneId, this.scenes);
+      let loadingScene = this.scenes[loadingSceneIndex];
+      const loadingSceneInitPromises = loadingScene.init();
+      if (loadingSceneInitPromises !== void 0) {
+        await loadingSceneInitPromises;
+      }
+      this.currentScenes.push(loadingScene);
+    }
+    const newSceneInitPromises = newScene.init();
+    if (newSceneInitPromises !== void 0) {
+      await newSceneInitPromises;
+    }
+    if (cleanPreviousState && lastCurrentSceneId !== void 0) {
+      this.deleteScene(lastCurrentSceneId);
+    }
+    if (loadingSceneId !== void 0) {
+      this.deleteScene(loadingSceneId);
+    }
+    this.currentScenes.push(newScene);
+  }
+  getSceneIndex(id, scenes) {
+    const loadingSceneIndex = scenes.findIndex((s) => s.id === id);
+    if (loadingSceneIndex === -1) {
+      throw new Error(`cannot find scene with id ${id}`);
+    }
+    return loadingSceneIndex;
+  }
+};
+
+// src/core/settings.ts
+var CANVAS_WIDTH = "canvasW";
+var CANVAS_HEIGHT = "canvasH";
+var Settings = class {
+  constructor() {
+    __publicField(this, "settings", /* @__PURE__ */ new Map());
+  }
+  get(key) {
+    if (!this.settings.has(key)) {
+      return void 0;
+    }
+    return this.settings.get(key);
+  }
+  set(key, value) {
+    this.settings = this.settings.set(key, value);
+  }
+};
+__publicField(Settings, "SETTINGS_DI", "settings");
+
+// src/mixins/with-dragging.ts
+var UIWINDOW_HITBOX_KEY = "uiwindow-hitbox";
+function withDragging(obj) {
+  return class extends obj {
+    constructor(...args) {
+      super(args);
+      __publicField(this, "isDragging", false);
+      __publicField(this, "dragStartX", 0);
+      __publicField(this, "dragStartY", 0);
+      __publicField(this, "initialX", 0);
+      __publicField(this, "initialY", 0);
+      __publicField(this, "elements", []);
+      __publicField(this, "boundingBox", {
+        nw: { x: 0, y: 0 },
+        se: { x: 0, y: 0 }
+      });
+      __publicField(this, "registerDragging", () => {
+        if (this.canvas === null) {
+          return;
+        }
+        this.interactionManager.upsertHitbox(UIWINDOW_HITBOX_KEY, {
+          boundingBox: this.getBBox,
+          callbacks: {
+            mousemove: this.mouseHover,
+            mousedown: this.mouseDown,
+            mouseup: this.mouseUp
+          },
+          color: { a: 255, r: 100, g: 100, b: 100 }
+        });
+      });
+      __publicField(this, "deregister", () => {
+        this.interactionManager.removeHitbox(UIWINDOW_HITBOX_KEY);
+      });
+      __publicField(this, "getBBox", () => {
+        return createBoundingBox(this.x, this.y, this.width, this.height);
+      });
+      __publicField(this, "mouseHover", (ev) => {
+        if (!this.isDragging) {
+          return;
+        }
+        const deltaX = ev.offsetX - this.dragStartX;
+        const deltaY = ev.offsetY - this.dragStartY;
+        this.x = this.initialX + deltaX;
+        this.y = this.initialY + deltaY;
+        for (let i = 0; i < this.elements.length; i++) {
+          const el = this.elements[i];
+          el.x = el.initialX + deltaX;
+          el.y = el.initialY + deltaY;
+        }
+        this.boundingBox = createBoundingBox(
+          this.x,
+          this.y,
+          this.width,
+          this.height
+        );
+        this.interactionManager.upsertHitbox(UIWINDOW_HITBOX_KEY, {
+          boundingBox: this.getBBox
+        });
+      });
+      __publicField(this, "mouseDown", (ev) => {
+        if (this.x === null || this.y === null || ev.buttons !== 1 || this.isDragging) {
+          return;
+        }
+        this.isDragging = true;
+        this.dragStartX = ev.clientX;
+        this.dragStartY = ev.clientY;
+        this.initialX = this.x;
+        this.initialY = this.y;
+        this.elements.forEach((el) => {
+          el.initialX = el.x;
+          el.initialY = el.y;
+        });
+      });
+      __publicField(this, "mouseUp", (_ev) => {
+        this.isDragging = false;
+      });
+    }
+  };
+}
+
+// src/mixins/with-event-handling.ts
+function withEventHandling(obj = class {
+}) {
+  return class extends obj {
+    constructor(...args) {
+      super(args);
+      __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
+        InteractionManager.INTERACTION_MANAGER_ID
+      ));
+    }
+  };
+}
+
+// src/models/base-object.ts
+var BaseObject = class {
+  constructor() {
+    __publicField(this, "_x", 0);
+    __publicField(this, "_y", 0);
+    __publicField(this, "width", 0);
+    __publicField(this, "height", 0);
+    __publicField(this, "canvas", null);
+    __publicField(this, "bbox", {
+      nw: { x: 0, y: 0 },
+      se: { x: 0, y: 0 }
+    });
+    __publicField(this, "elements", []);
+    __publicField(this, "getBBox", () => {
+      return this.bbox;
+    });
+  }
+  async init(..._args) {
+  }
+  async update(_deltaTime, ..._args) {
+  }
+  render(..._args) {
+  }
+  clean(..._args) {
+  }
+  set x(v) {
+    this._x = v;
+    this.calcBBox();
+  }
+  get x() {
+    return this._x;
+  }
+  set y(v) {
+    this._y = v;
+    this.calcBBox();
+  }
+  get y() {
+    return this._y;
+  }
+  getPosition() {
+    return { x: this._x, y: this.y };
+  }
+  calcBBox() {
+    this.bbox = createBoundingBox(this.x, this.y, this.width, this.height);
+  }
+  getSize() {
+    return void 0;
+  }
+  getWidth() {
+    return this.width;
+  }
+  setWidth(width) {
+    this.width = width;
+    this.bbox = createBoundingBox(this._x, this.y, this.width, this.height);
+  }
+  getHeight() {
+    return this.height;
+  }
+  setHeight(height) {
+    this.height = height;
+    this.bbox = createBoundingBox(this._x, this.y, this.width, this.height);
+  }
+};
 
 // src/models/game-object.ts
 var GameObject = class {
@@ -893,92 +1328,6 @@ function pivotComparator(p1, p2) {
   return p1.position.x === p2.position.x && p1.position.y === p2.position.y && p1.direction === p2.direction;
 }
 
-// src/ui/with-events.ts
-function withEvents(obj) {
-  return class extends obj {
-    constructor() {
-      super(...arguments);
-      /**
-       * A map to store event callbacks by their ID.
-       * @type {Map<string, Callback>}
-       */
-      __publicField(this, "events", /* @__PURE__ */ new Map());
-      /**
-       * A list of AbortController instances to manage event listeners.
-       * @type {AbortController[]}
-       */
-      __publicField(this, "abortControllers", []);
-    }
-    /**
-     * Adds a callback for a specific event type and ID.
-     */
-    addCallback(eventType, id, ev, synchronous, triggerCondition = () => true) {
-      if (this.events?.has(id)) {
-        console.warn(`event with id ${id} already exists!`);
-        return;
-      }
-      this.events?.set(id, {
-        eventType,
-        ev,
-        synchronous,
-        triggerCondition
-      });
-    }
-    /**
-     * Removes a callback by its ID.
-     */
-    removeCallback(id) {
-      if (this.events?.has(id) === false) {
-        console.warn(`cannot remove ${id}, event not found!`);
-        return;
-      }
-      this.events?.delete(id);
-    }
-    /**
-     * Deregisters all events by aborting their associated AbortControllers.
-     *
-     * @returns {void}
-     */
-    deregisterEvents() {
-      this.abortControllers.forEach((ac) => ac.abort());
-    }
-    /**
-     * Enables an event of a specific type on a given event target.
-     *
-     * @template T
-     * @param {T} eventType - The type of the event to enable.
-     * @returns {(eventTarget: EventTarget) => void} A function that takes an event target and adds the event listeners to it.
-     */
-    enableEvent(eventType) {
-      return (eventTarget) => {
-        if (eventTarget === void 0) {
-          throw new Error("eventTarget is undefined!");
-        }
-        const controller = this.abortControllers[this.abortControllers.push(new AbortController()) - 1];
-        this.events.forEach((callBack) => {
-          eventTarget.addEventListener(
-            eventType,
-            async (ev) => {
-              if (callBack.eventType !== eventType || callBack.triggerCondition(ev) === false) {
-                return;
-              }
-              if (ev === void 0) {
-                console.warn(`empty event cannot be run!`);
-                return;
-              }
-              if (callBack.synchronous) {
-                return await callBack.ev(ev);
-              }
-              return callBack.ev(ev);
-            },
-            { signal: controller.signal }
-          );
-        });
-      };
-    }
-  };
-}
-
 // src/ui/canvas/helpers/text.ts
 function getTextBBox(ctx, text, position) {
   const metrics = ctx.measureText(text);
@@ -1010,62 +1359,114 @@ function getWrappedTextLines(ctx, text, maxWidth) {
   return lines;
 }
 
-// src/ui/controls/label.ts
-var UILabel = class extends GameObject {
-  constructor(ctx, id, posX, posY, textStyle, text) {
-    super(ctx);
-    __publicField(this, "id");
-    __publicField(this, "text");
-    __publicField(this, "DEFAULT_TEXT_STYLE", {
-      direction: "inherit",
-      font: "10px sans-serif",
-      fontKerning: "auto",
-      fontStretch: "normal",
-      fontVariantCaps: "normal",
-      letterSpacing: "normal",
-      textAlign: "start",
-      textBaseline: "alphabetic",
-      textRendering: "auto",
-      wordSpacing: "normal"
+// src/ui/controls/button.ts
+var UIBUTTON_HITBOX_KEY = "ui-button-hitbox";
+var UIBUTTON_BACKGROUND_COLOR = { r: 100, g: 100, b: 100, a: 255 };
+var UIBUTTON_HOVER_COLOR = { r: 150, g: 150, b: 150, a: 255 };
+var UIBUTTON_ACTIVE_COLOR = { r: 200, g: 200, b: 200, a: 255 };
+var UIBUTTON_TEXT_COLOR = { r: 255, g: 255, b: 255, a: 255 };
+var ButtonBaseClass = class extends BaseObject {
+};
+var ButtonBase = class extends withEventHandling(ButtonBaseClass) {
+};
+var UIButton = class extends ButtonBase {
+  constructor(canvas, ctx) {
+    super();
+    __publicField(this, "ctx");
+    __publicField(this, "backgroundColor", UIBUTTON_BACKGROUND_COLOR);
+    __publicField(this, "hoverColor", UIBUTTON_HOVER_COLOR);
+    __publicField(this, "textColor", UIBUTTON_TEXT_COLOR);
+    __publicField(this, "activeColor", UIBUTTON_ACTIVE_COLOR);
+    __publicField(this, "isHovering", false);
+    __publicField(this, "layer", 50);
+    __publicField(this, "hitBoxKey", UIBUTTON_HITBOX_KEY);
+    __publicField(this, "getBBox", () => {
+      return createBoundingBox(this.x, this.y, this.width, this.height);
     });
-    __publicField(this, "textStyle", this.DEFAULT_TEXT_STYLE);
+    __publicField(this, "mouseMove", (ev) => {
+      if (ev.offsetX === void 0 || ev.offsetY === void 0) {
+        return;
+      }
+      this.isHovering = true;
+    });
+    __publicField(this, "mouseOut", (_ev) => {
+      this.isHovering = false;
+    });
+    this.ctx = ctx;
+    this.canvas = canvas;
+  }
+  async init(hitBoxId, layer = 50) {
+    await super.init();
+    this.layer = layer;
+    this.hitBoxKey = hitBoxId ?? UIBUTTON_HITBOX_KEY;
+    this.interactionManager.upsertHitbox(this.hitBoxKey, {
+      callbacks: {
+        mousemove: this.mouseMove,
+        mouseout: this.mouseOut
+      },
+      color: { a: 255, r: 2, g: 12, b: 21 },
+      layer,
+      boundingBox: this.getBBox
+    });
+  }
+  async update(_deltaTime) {
+    await super.update(_deltaTime);
+    this.interactionManager.upsertHitbox(UIBUTTON_HITBOX_KEY, {
+      layer: this.layer,
+      boundingBox: this.getBBox
+    });
+  }
+  clean(..._args) {
+    super.clean();
+    this.interactionManager.removeHitbox(UIBUTTON_HITBOX_KEY);
+  }
+  render() {
+    this.ctx.fillStyle = this.isHovering ? colorToString(this.hoverColor) : colorToString(this.backgroundColor);
+    this.ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+};
+
+// src/ui/controls/label.ts
+var UILabel = class extends BaseObject {
+  constructor() {
+    super();
+    __publicField(this, "id");
+    __publicField(this, "ctx");
+    __publicField(this, "text");
+    __publicField(this, "textStyle");
     __publicField(this, "textFillStyle", "#000");
     __publicField(this, "textStrokeStyle", "#000");
-    this.id = id;
-    this.position = { x: posX ?? 0, y: posY ?? 0 };
-    if (textStyle !== void 0) {
-      this.textStyle = { ...this.textStyle, ...textStyle };
-    }
-    this.text = text ?? "";
+    __publicField(this, "getBBox", () => {
+      if (!this.ctx) {
+        return void 0;
+      }
+      return getTextBBox(this.ctx, this.text ?? "", { x: this.x, y: this.y });
+    });
   }
-  async init(...args) {
-    await super.init(...args);
+  async init() {
   }
-  async update(deltaTime, ...args) {
-    super.update(deltaTime, args);
-    if (this.text === void 0 || this.position === void 0) {
+  async update() {
+    if (this.text === void 0 || this.ctx === void 0) {
       return;
     }
-    this.bbox = getTextBBox(this.ctx, this.text, this.position);
+    this.calcBBox();
   }
-  render(...args) {
-    super.render(args);
-    if (this.position === void 0 || this.text === void 0) {
+  render() {
+    if (this.text === void 0 || this.ctx === void 0) {
       return;
     }
     this.applyStyles();
-    this.ctx.moveTo(this.position?.x, this.position.y);
-    this.ctx.strokeText(this.text, this.position.x, this.position.y);
-    this.ctx.fillText(this.text, this.position.x, this.position.y);
+    this.ctx.moveTo(this.x, this.y);
+    this.ctx.strokeText(this.text, this.x, this.y);
+    this.ctx.fillText(this.text, this.x, this.y);
   }
-  clean(...args) {
-    super.clean(args);
+  clean() {
   }
   setText(text) {
     this.text = text;
   }
   getSize() {
-    if (this.textFillStyle === void 0 || this.textStrokeStyle === void 0) {
+    if (this.textFillStyle === void 0 || this.textStrokeStyle === void 0 || this.text === void 0 || this.ctx === void 0) {
       return;
     }
     this.applyStyles();
@@ -1074,12 +1475,15 @@ var UILabel = class extends GameObject {
       return void 0;
     }
     return {
-      x: textMetrics.width,
-      y: textMetrics?.fontBoundingBoxAscent + textMetrics.fontBoundingBoxDescent
+      width: textMetrics.width,
+      height: textMetrics?.fontBoundingBoxAscent + textMetrics.fontBoundingBoxDescent
     };
   }
-  getBBox() {
-    return this.bbox;
+  calcBBox() {
+    if (this.text === void 0 || this.ctx === void 0) {
+      return;
+    }
+    this.bbox = getTextBBox(this.ctx, this.text, { x: this.x, y: this.y });
   }
   setTextFillStyle(style) {
     this.textFillStyle = style;
@@ -1091,6 +1495,9 @@ var UILabel = class extends GameObject {
     this.textStyle = textStyle;
   }
   applyStyles() {
+    if (this.ctx === void 0) {
+      return;
+    }
     this.ctx.font = this.textStyle?.font ?? "20px Verdana";
     this.ctx.textAlign = this.textStyle?.textAlign ?? "left";
     this.ctx.textBaseline = this.textStyle?.textBaseline ?? "alphabetic";
@@ -1100,64 +1507,6 @@ var UILabel = class extends GameObject {
     if (this.textFillStyle !== void 0) {
       this.ctx.fillStyle = this.textFillStyle;
     }
-  }
-};
-
-// src/ui/controls/clickable-label.ts
-var MOUSE_ENTER_ID = "uiClickableLabel-enter";
-var MOUSE_LEAVE_ID = "uiClickableLabel-leave";
-var UIClickableLabel = class extends withEvents(UILabel) {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "mouseOver", false);
-    __publicField(this, "mouseEnterCallbacks", []);
-    __publicField(this, "mouseLeaveCallbacks", []);
-    __publicField(this, "addMouseEnterCallback", (ev) => {
-      this.mouseEnterCallbacks.push(ev);
-    });
-    __publicField(this, "addMouseLeaveCallback", (ev) => {
-      this.mouseLeaveCallbacks.push(ev);
-    });
-  }
-  async init(canvas, ..._args) {
-    super.init(canvas);
-    this.addCallback(
-      "mousemove",
-      MOUSE_ENTER_ID,
-      () => {
-        this.playBtnMouseEnter();
-        this.mouseEnterCallbacks.forEach((callback) => callback());
-      },
-      false,
-      (ev) => isPointInAlignedBBox(
-        { x: ev.offsetX, y: ev.offsetY },
-        this.getBBox()
-      ) && this.mouseOver === false
-    );
-    this.enableEvent("mousemove")(canvas);
-  }
-  clean(..._args) {
-    super.clean();
-    this.deregisterEvents();
-    this.removeCallback(MOUSE_ENTER_ID);
-    this.removeCallback(MOUSE_LEAVE_ID);
-  }
-  playBtnMouseEnter() {
-    this.mouseOver = true;
-    this.addCallback(
-      "mousemove",
-      MOUSE_LEAVE_ID,
-      () => {
-        this.playBtnMouseLeave();
-        this.mouseLeaveCallbacks.forEach((callback) => callback());
-      },
-      false,
-      (ev) => !isPointInAlignedBBox({ x: ev.offsetX, y: ev.offsetY }, this.getBBox())
-    );
-  }
-  playBtnMouseLeave() {
-    this.mouseOver = false;
-    this.removeCallback(MOUSE_LEAVE_ID);
   }
 };
 
@@ -1246,23 +1595,32 @@ export {
   ASSETS_MANAGER_DI,
   AssetsManager,
   AudioController,
+  BLUE,
+  BaseObject,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   DIContainer,
+  GREEN,
   Game,
   GameObject,
+  InteractionManager,
   LinkedList,
   LinkedListNode,
   QuadTree,
+  RED,
   SCENE_MANAGER_DI,
   SceneManager,
   Settings,
-  UIClickableLabel,
+  UIButton,
   UILabel,
   UIPanel,
+  YELLOW,
   angleBetween,
   calculateEdgesPerpendiculars,
   calculateNormals,
+  colorToString,
+  colorize,
+  createBoundingBox,
   createPolygon,
   createSquare,
   createTriangle,
@@ -1271,12 +1629,14 @@ export {
   dotProduct,
   drawRotated,
   getBBoxRect,
+  getCtxPixelColor,
   getTextBBox,
   getVectorPerpendicular,
   getWorldPolygon,
   getWrappedTextLines,
   intervalsOverlap,
   isPointInAlignedBBox,
+  isSameColor,
   magnitude,
   pivotComparator,
   printWorldPolygonInfo,
@@ -1287,6 +1647,7 @@ export {
   satCollision,
   toPrecisionNumber,
   updatePolygonShape,
-  withEvents
+  withDragging,
+  withEventHandling
 };
 //# sourceMappingURL=hypertoroid.js.map

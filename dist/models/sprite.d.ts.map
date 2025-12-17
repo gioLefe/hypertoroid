@@ -1,0 +1,1 @@
+{"version":3,"file":"sprite.d.ts","sourceRoot":"","sources":["../../src/models/sprite.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,SAAS,EAAE,MAAM,cAAc,CAAC;AAEzC,MAAM,WAAW,MAAO,SAAQ,SAAS;IACvC,GAAG,EAAE,wBAAwB,CAAC;IAC9B,MAAM,CAAC,QAAQ,EAAE,MAAM,GAAG,IAAI,CAAC;IAC/B,2BAA2B,IAAI,MAAM,CAAC;CACvC"}

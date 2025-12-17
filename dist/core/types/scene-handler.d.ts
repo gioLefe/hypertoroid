@@ -35,3 +35,4 @@ export interface SceneHandler {
      */
     changeScene(id: string, cleanPreviousState: boolean, loadingSceneId?: string): Promise<void>;
 }
+//# sourceMappingURL=scene-handler.d.ts.map
