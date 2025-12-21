@@ -10,9 +10,9 @@ export * from "./game-object";
 export * from "./graphic-context";
 export * from "./min-max";
 export * from "./polygon";
+export * from "./size";
 export * from "./sprite";
 export * from "./structs";
 export * from "./unit-vector";
 export * from "./vec";
-export * from "./size";
 //# sourceMappingURL=index.d.ts.map

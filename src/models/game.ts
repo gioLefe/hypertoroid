@@ -95,24 +95,17 @@ export abstract class Game implements GameCycle {
     }
 
     const currentScenes = this.sceneManager?.getCurrentScenes();
-
-    if (currentScenes === undefined) {
+    if (!currentScenes) {
       console.warn("no scene to update");
       return;
     }
-    try {
-      const results = await Promise.allSettled(
-        currentScenes.map((scene) => scene.update(deltaTime))
-      );
 
-      // Log any rejected promises for debugging
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(`Scene ${index} update failed:`, result.reason);
-        }
-      });
-    } catch (error) {
-      console.error("Critical error in update loop:", error);
+    for (const scene of currentScenes) {
+      try {
+        await scene.update(deltaTime);
+      } catch (error) {
+        console.error("Scene update failed:", error);
+      }
     }
   }
 

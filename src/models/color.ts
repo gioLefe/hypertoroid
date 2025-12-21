@@ -23,33 +23,26 @@ export function colorToString(color: Color) {
   return `rgba(${color.r},${color.g},${color.b},${color.a})`;
 }
 
+
+const pixelColorCache: Color = { r: 0, g: 0, b: 0, a: 0 };
 export function getCtxPixelColor(
   x: number,
   y: number,
-  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
 ): Color {
-  const pixelBuffer = new Uint8ClampedArray(4);
-
-  ctx.getImageData(x, y, 1, 1).data.forEach((v, i) => {
-    pixelBuffer[i] = v;
-  });
-  if (pixelBuffer === undefined) {
-    throw new Error("Failed to get pixel data");
-  }
-
-  return {
-    r: pixelBuffer[0],
-    g: pixelBuffer[1],
-    b: pixelBuffer[2],
-    a: pixelBuffer[3],
-  };
+  const data = ctx.getImageData(x, y, 1, 1).data;
+  pixelColorCache.r = data[0];
+  pixelColorCache.g = data[1];
+  pixelColorCache.b = data[2];
+  pixelColorCache.a = data[3];
+  return pixelColorCache;
 }
 
 export function colorize(
   image: HTMLImageElement,
   r: number,
   g: number,
-  b: number,
+  b: number
 ) {
   const imageSize = image.width;
 

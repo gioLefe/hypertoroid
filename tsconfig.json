@@ -14,6 +14,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "emitDeclarationOnly": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
 
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
@@ -22,6 +24,7 @@
     "isolatedModules": true,
 
     /* Linting */
+
     "strictFunctionTypes": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

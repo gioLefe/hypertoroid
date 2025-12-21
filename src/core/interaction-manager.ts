@@ -1,4 +1,4 @@
-import { isPointInAlignedBBox } from "../helpers";
+import { ColorHeap, isPointInAlignedBBox } from "../helpers";
 import { BoundingBox, Vec2 } from "../models";
 import {
   Color,
@@ -26,6 +26,10 @@ export type HitBoxColor = Color & {
   a: 255; // Ensure fully opaque for hitbox rendering
 };
 
+export type HitBoxData = {
+  isDragging: boolean;
+};
+
 /**
  * Unified hitbox + event definition.
  * Spatial hitbox with optional event callbacks and priority layer.
@@ -35,13 +39,16 @@ export type HitboxEvent = {
   layer?: number; // 0-100; higher = higher priority. Defaults to 0.
 
   // Spatial definition (at least one should be provided)
-  boundingBox?: () => BoundingBox<number> | undefined;
+  getBoundingBox?: () => BoundingBox<number> | undefined;
   hitTest?: HitTestFn;
   color?: HitBoxColor;
   image?: HTMLImageElement;
 
   // Event callbacks
   callbacks?: EventCallback;
+
+  // Metadata
+  data?: Partial<HitBoxData>;
 };
 
 export type HitboxEventId = string;
@@ -63,6 +70,8 @@ export class InteractionManager {
   private mouseDownTargetId: string | null = null;
   private mouseUpCallback: Callback<"mouseup"> | null = null;
 
+  colorHeap = new ColorHeap();
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.updateCanvasSize(canvas.width, canvas.height);
@@ -80,14 +89,19 @@ export class InteractionManager {
    * Returns undefined if no hitbox matches.
    */
   getHitboxAt(point: Vec2<number>): HitboxEvent | undefined {
-    const candidates = this.getHitboxArray().filter((hb) =>
-      this.hitTest(hb, point)
-    );
+    let winner: HitboxEvent | undefined;
+    let highestLayer = -Infinity;
 
-    if (candidates.length === 0) return undefined;
-
-    // Sort by layer (highest first) and return the winner
-    return candidates.sort((a, b) => (b.layer ?? 0) - (a.layer ?? 0))[0];
+    for (const hb of this.hitboxEvents.values()) {
+      if (this.hitTest(hb, point)) {
+        const layer = hb.layer ?? 0;
+        if (layer > highestLayer) {
+          highestLayer = layer;
+          winner = hb;
+        }
+      }
+    }
+    return winner;
   }
 
   updateCanvasSize(width: number, height: number) {
@@ -108,11 +122,12 @@ export class InteractionManager {
     this.hitboxEvents.set(id, {
       id,
       layer: options.layer ?? existing?.layer ?? 0,
-      boundingBox: options.boundingBox ?? existing?.boundingBox,
+      getBoundingBox: options.getBoundingBox ?? existing?.getBoundingBox,
       hitTest: options.hitTest ?? existing?.hitTest,
       color: options.color ?? existing?.color,
       image: options.image ?? existing?.image,
       callbacks: options.callbacks ?? existing?.callbacks,
+      data: options.data ?? existing?.data,
     });
     this.hitboxArray = null;
   }
@@ -137,13 +152,8 @@ export class InteractionManager {
 
     ctx.clearRect(0, 0, this.hitBoxCanvas.width, this.hitBoxCanvas.height);
 
-    // Sort by layer and render in order (lowest to highest)
-    const sortedByLayer = this.getHitboxArray().sort(
-      (a, b) => (a.layer ?? 0) - (b.layer ?? 0)
-    );
-
-    for (const hitboxEvent of sortedByLayer) {
-      const bbox = hitboxEvent.boundingBox?.();
+    for (const hitboxEvent of this.getHitboxArray()) {
+      const bbox = hitboxEvent.getBoundingBox?.();
       if (!bbox || !hitboxEvent.color) continue;
 
       if (hitboxEvent.image) {
@@ -173,6 +183,7 @@ export class InteractionManager {
     }
     this.hitboxEvents.clear();
     this.hitboxArray = null;
+    this.colorizedCache.clear();
   }
 
   private listener: EventListener = <K extends EventType>(
@@ -215,7 +226,7 @@ export class InteractionManager {
     }
 
     this.handleMouseButtonRelease(htmlEv, evType, hitBoxEvent);
-    this.handleMouseOut(htmlEv, evType, hitBoxEvent);
+    this.handleMouseMove(htmlEv, evType, hitBoxEvent);
   };
 
   private extractPoint(
@@ -229,8 +240,8 @@ export class InteractionManager {
 
   private hitTest(hitboxEvent: HitboxEvent, point: Vec2<number>): boolean {
     // bbox test first
-    if (hitboxEvent.boundingBox) {
-      const bbox = hitboxEvent.boundingBox();
+    if (hitboxEvent.getBoundingBox) {
+      const bbox = hitboxEvent.getBoundingBox();
       if (!bbox || !isPointInAlignedBBox(point, bbox)) {
         return false;
       }
@@ -248,7 +259,7 @@ export class InteractionManager {
     }
 
     // bbox passed or no constraints
-    return hitboxEvent.boundingBox !== undefined;
+    return hitboxEvent.getBoundingBox !== undefined;
   }
 
   private colorizeCached(
@@ -266,7 +277,9 @@ export class InteractionManager {
 
   private getHitboxArray(): HitboxEvent[] {
     if (!this.hitboxArray) {
-      this.hitboxArray = Array.from(this.hitboxEvents.values());
+      this.hitboxArray = Array.from(this.hitboxEvents.values()).sort(
+        (a, b) => (a.layer ?? 0) - (b.layer ?? 0)
+      );
     }
     return this.hitboxArray;
   }
@@ -277,7 +290,7 @@ export class InteractionManager {
     }
     return this.hitboxArray?.find((hb) => {
       return (
-        hb.boundingBox === undefined &&
+        hb.getBoundingBox === undefined &&
         hb.hitTest === undefined &&
         hb.color === undefined &&
         hb.image === undefined &&
@@ -303,21 +316,37 @@ export class InteractionManager {
     if (evType === "mouseup" && this.mouseUpCallback) {
       if (this.mouseDownTargetId !== hitBoxEvent.id) {
         this.mouseUpCallback(htmlEv as HTMLElementEventMap["mouseup"]);
-        this.mouseDownTargetId = null;
         this.mouseUpCallback = null;
       }
+      this.mouseDownTargetId = null;
     }
   };
 
-  /** Handle mouse hover and mouseout across different hitboxes.
+  /** Handle mouse hover, dragging and mouseout across different hitboxes.
    * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
    * the original hitbox's mouseup callback is still invoked.
    */
-  private handleMouseOut = (
+  private handleMouseMove = (
     htmlEv: HTMLElementEventMap[keyof HTMLElementEventMap],
     evType: EventType,
     hitBoxEvent: HitboxEvent
   ) => {
+    if (evType !== "mousemove") {
+      return;
+    }
+
+    // handle the case where the mouse was previously over another hitbox and mousedown is also set (means a drag could be happening)
+    if (this.mouseDownTargetId && this.mouseDownTargetId !== hitBoxEvent.id) {
+      const originalHitbox = this.hitboxEvents.get(this.mouseDownTargetId);
+
+      // if dragging, invoke the mousemove callback of the original hitbox
+      const mouseMoveCallback = originalHitbox?.callbacks?.["mousemove"];
+      if (mouseMoveCallback && originalHitbox.data?.isDragging) {
+        mouseMoveCallback(htmlEv as HTMLElementEventMap["mousemove"]);
+        return;
+      }
+    }
+
     if (evType === "mousemove" && this.mouseOutCallback === null) {
       this.mouseOutCallback = hitBoxEvent.callbacks?.["mouseout"] || null;
       this.mouseMoveTargetId = hitBoxEvent.id || null;
@@ -331,13 +360,4 @@ export class InteractionManager {
       }
     }
   };
-
-  /**
-   * Query all hitboxes at a point, sorted by priority (highest first).
-   */
-  // getHitboxesAt(point: Vec2<number>): HitboxEvent[] {
-  //   return this.getHitboxArray()
-  //     .filter((hb) => this.hitTest(hb, point))
-  //     .sort((a, b) => (b.layer ?? 0) - (a.layer ?? 0));
-  // }
 }

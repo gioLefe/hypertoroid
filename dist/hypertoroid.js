@@ -205,21 +205,16 @@ var Game = class {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
     const currentScenes = this.sceneManager?.getCurrentScenes();
-    if (currentScenes === void 0) {
+    if (!currentScenes) {
       console.warn("no scene to update");
       return;
     }
-    try {
-      const results = await Promise.allSettled(
-        currentScenes.map((scene) => scene.update(deltaTime))
-      );
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(`Scene ${index} update failed:`, result.reason);
-        }
-      });
-    } catch (error) {
-      console.error("Critical error in update loop:", error);
+    for (const scene of currentScenes) {
+      try {
+        await scene.update(deltaTime);
+      } catch (error) {
+        console.error("Scene update failed:", error);
+      }
     }
   }
   render(..._args) {
@@ -366,6 +361,34 @@ function drawRotated(ctx, canvasW, canvasH, img, degrees) {
   ctx.drawImage(img, -img.width / 2, -img.width / 2);
   ctx.restore();
 }
+
+// src/helpers/color-heap.ts
+var ColorHeap = class {
+  constructor() {
+    __publicField(this, "freedColors", []);
+    __publicField(this, "nextColor", { r: 1, g: 0, b: 0, a: 255 });
+  }
+  getNext() {
+    let color = this.freedColors.shift();
+    if (color !== void 0) {
+      return color;
+    }
+    color = { ...this.nextColor };
+    this.nextColor.r += 1;
+    if (this.nextColor.r > 255) {
+      this.nextColor.r = 0;
+      this.nextColor.g += 1;
+      if (this.nextColor.g > 255) {
+        this.nextColor.g = 0;
+        this.nextColor.b += 1;
+        if (this.nextColor.b > 255) {
+          throw new Error("Ran out of unique colors");
+        }
+      }
+    }
+    return color;
+  }
+};
 
 // src/helpers/math.ts
 function getVectorPerpendicular(axis) {
@@ -661,20 +684,14 @@ function isSameColor(color, colorToCompare) {
 function colorToString(color) {
   return `rgba(${color.r},${color.g},${color.b},${color.a})`;
 }
+var pixelColorCache = { r: 0, g: 0, b: 0, a: 0 };
 function getCtxPixelColor(x, y, ctx) {
-  const pixelBuffer = new Uint8ClampedArray(4);
-  ctx.getImageData(x, y, 1, 1).data.forEach((v, i) => {
-    pixelBuffer[i] = v;
-  });
-  if (pixelBuffer === void 0) {
-    throw new Error("Failed to get pixel data");
-  }
-  return {
-    r: pixelBuffer[0],
-    g: pixelBuffer[1],
-    b: pixelBuffer[2],
-    a: pixelBuffer[3]
-  };
+  const data = ctx.getImageData(x, y, 1, 1).data;
+  pixelColorCache.r = data[0];
+  pixelColorCache.g = data[1];
+  pixelColorCache.b = data[2];
+  pixelColorCache.a = data[3];
+  return pixelColorCache;
 }
 function colorize(image, r, g, b) {
   const imageSize = image.width;
@@ -705,6 +722,7 @@ var InteractionManager = class {
     __publicField(this, "mouseOutCallback", null);
     __publicField(this, "mouseDownTargetId", null);
     __publicField(this, "mouseUpCallback", null);
+    __publicField(this, "colorHeap", new ColorHeap());
     __publicField(this, "listener", (htmlEv) => {
       const evType = htmlEv.type;
       if (evType.indexOf("key") === 0) {
@@ -733,7 +751,7 @@ var InteractionManager = class {
         callback(htmlEv);
       }
       this.handleMouseButtonRelease(htmlEv, evType, hitBoxEvent);
-      this.handleMouseOut(htmlEv, evType, hitBoxEvent);
+      this.handleMouseMove(htmlEv, evType, hitBoxEvent);
     });
     /** Handle mouse button release across different hitboxes.
      * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
@@ -747,16 +765,27 @@ var InteractionManager = class {
       if (evType === "mouseup" && this.mouseUpCallback) {
         if (this.mouseDownTargetId !== hitBoxEvent.id) {
           this.mouseUpCallback(htmlEv);
-          this.mouseDownTargetId = null;
           this.mouseUpCallback = null;
         }
+        this.mouseDownTargetId = null;
       }
     });
-    /** Handle mouse hover and mouseout across different hitboxes.
+    /** Handle mouse hover, dragging and mouseout across different hitboxes.
      * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
      * the original hitbox's mouseup callback is still invoked.
      */
-    __publicField(this, "handleMouseOut", (htmlEv, evType, hitBoxEvent) => {
+    __publicField(this, "handleMouseMove", (htmlEv, evType, hitBoxEvent) => {
+      if (evType !== "mousemove") {
+        return;
+      }
+      if (this.mouseDownTargetId && this.mouseDownTargetId !== hitBoxEvent.id) {
+        const originalHitbox = this.hitboxEvents.get(this.mouseDownTargetId);
+        const mouseMoveCallback = originalHitbox?.callbacks?.["mousemove"];
+        if (mouseMoveCallback && originalHitbox.data?.isDragging) {
+          mouseMoveCallback(htmlEv);
+          return;
+        }
+      }
       if (evType === "mousemove" && this.mouseOutCallback === null) {
         this.mouseOutCallback = hitBoxEvent.callbacks?.["mouseout"] || null;
         this.mouseMoveTargetId = hitBoxEvent.id || null;
@@ -780,11 +809,18 @@ var InteractionManager = class {
    * Returns undefined if no hitbox matches.
    */
   getHitboxAt(point) {
-    const candidates = this.getHitboxArray().filter(
-      (hb) => this.hitTest(hb, point)
-    );
-    if (candidates.length === 0) return void 0;
-    return candidates.sort((a, b) => (b.layer ?? 0) - (a.layer ?? 0))[0];
+    let winner;
+    let highestLayer = -Infinity;
+    for (const hb of this.hitboxEvents.values()) {
+      if (this.hitTest(hb, point)) {
+        const layer = hb.layer ?? 0;
+        if (layer > highestLayer) {
+          highestLayer = layer;
+          winner = hb;
+        }
+      }
+    }
+    return winner;
   }
   updateCanvasSize(width, height) {
     this.hitBoxCanvas.width = width;
@@ -802,11 +838,12 @@ var InteractionManager = class {
     this.hitboxEvents.set(id, {
       id,
       layer: options.layer ?? existing?.layer ?? 0,
-      boundingBox: options.boundingBox ?? existing?.boundingBox,
+      getBoundingBox: options.getBoundingBox ?? existing?.getBoundingBox,
       hitTest: options.hitTest ?? existing?.hitTest,
       color: options.color ?? existing?.color,
       image: options.image ?? existing?.image,
-      callbacks: options.callbacks ?? existing?.callbacks
+      callbacks: options.callbacks ?? existing?.callbacks,
+      data: options.data ?? existing?.data
     });
     this.hitboxArray = null;
   }
@@ -825,11 +862,8 @@ var InteractionManager = class {
   render(ctx = this.hitBoxOffscreenCtx) {
     if (!ctx) return;
     ctx.clearRect(0, 0, this.hitBoxCanvas.width, this.hitBoxCanvas.height);
-    const sortedByLayer = this.getHitboxArray().sort(
-      (a, b) => (a.layer ?? 0) - (b.layer ?? 0)
-    );
-    for (const hitboxEvent of sortedByLayer) {
-      const bbox = hitboxEvent.boundingBox?.();
+    for (const hitboxEvent of this.getHitboxArray()) {
+      const bbox = hitboxEvent.getBoundingBox?.();
       if (!bbox || !hitboxEvent.color) continue;
       if (hitboxEvent.image) {
         const colorized = this.colorizeCached(
@@ -856,6 +890,7 @@ var InteractionManager = class {
     }
     this.hitboxEvents.clear();
     this.hitboxArray = null;
+    this.colorizedCache.clear();
   }
   extractPoint(ev) {
     if ("offsetX" in ev && "offsetY" in ev) {
@@ -864,8 +899,8 @@ var InteractionManager = class {
     return null;
   }
   hitTest(hitboxEvent, point) {
-    if (hitboxEvent.boundingBox) {
-      const bbox = hitboxEvent.boundingBox();
+    if (hitboxEvent.getBoundingBox) {
+      const bbox = hitboxEvent.getBoundingBox();
       if (!bbox || !isPointInAlignedBBox(point, bbox)) {
         return false;
       }
@@ -877,7 +912,7 @@ var InteractionManager = class {
       const pixel = getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx);
       return isSameColor(pixel, hitboxEvent.color);
     }
-    return hitboxEvent.boundingBox !== void 0;
+    return hitboxEvent.getBoundingBox !== void 0;
   }
   colorizeCached(image, color) {
     const key = `${image.src}:${color.r},${color.g},${color.b},${color.a}`;
@@ -890,7 +925,9 @@ var InteractionManager = class {
   }
   getHitboxArray() {
     if (!this.hitboxArray) {
-      this.hitboxArray = Array.from(this.hitboxEvents.values());
+      this.hitboxArray = Array.from(this.hitboxEvents.values()).sort(
+        (a, b) => (a.layer ?? 0) - (b.layer ?? 0)
+      );
     }
     return this.hitboxArray;
   }
@@ -899,17 +936,9 @@ var InteractionManager = class {
       return void 0;
     }
     return this.hitboxArray?.find((hb) => {
-      return hb.boundingBox === void 0 && hb.hitTest === void 0 && hb.color === void 0 && hb.image === void 0 && hb.callbacks?.[evType];
+      return hb.getBoundingBox === void 0 && hb.hitTest === void 0 && hb.color === void 0 && hb.image === void 0 && hb.callbacks?.[evType];
     });
   }
-  /**
-   * Query all hitboxes at a point, sorted by priority (highest first).
-   */
-  // getHitboxesAt(point: Vec2<number>): HitboxEvent[] {
-  //   return this.getHitboxArray()
-  //     .filter((hb) => this.hitTest(hb, point))
-  //     .sort((a, b) => (b.layer ?? 0) - (a.layer ?? 0));
-  // }
 };
 __publicField(InteractionManager, "INTERACTION_MANAGER_ID", "InteractionManager");
 
@@ -997,99 +1026,6 @@ var Settings = class {
 };
 __publicField(Settings, "SETTINGS_DI", "settings");
 
-// src/mixins/with-dragging.ts
-var UIWINDOW_HITBOX_KEY = "uiwindow-hitbox";
-function withDragging(obj) {
-  return class extends obj {
-    constructor(...args) {
-      super(args);
-      __publicField(this, "isDragging", false);
-      __publicField(this, "dragStartX", 0);
-      __publicField(this, "dragStartY", 0);
-      __publicField(this, "initialX", 0);
-      __publicField(this, "initialY", 0);
-      __publicField(this, "elements", []);
-      __publicField(this, "boundingBox", {
-        nw: { x: 0, y: 0 },
-        se: { x: 0, y: 0 }
-      });
-      __publicField(this, "registerDragging", () => {
-        if (this.canvas === null) {
-          return;
-        }
-        this.interactionManager.upsertHitbox(UIWINDOW_HITBOX_KEY, {
-          boundingBox: this.getBBox,
-          callbacks: {
-            mousemove: this.mouseHover,
-            mousedown: this.mouseDown,
-            mouseup: this.mouseUp
-          },
-          color: { a: 255, r: 100, g: 100, b: 100 }
-        });
-      });
-      __publicField(this, "deregister", () => {
-        this.interactionManager.removeHitbox(UIWINDOW_HITBOX_KEY);
-      });
-      __publicField(this, "getBBox", () => {
-        return createBoundingBox(this.x, this.y, this.width, this.height);
-      });
-      __publicField(this, "mouseHover", (ev) => {
-        if (!this.isDragging) {
-          return;
-        }
-        const deltaX = ev.offsetX - this.dragStartX;
-        const deltaY = ev.offsetY - this.dragStartY;
-        this.x = this.initialX + deltaX;
-        this.y = this.initialY + deltaY;
-        for (let i = 0; i < this.elements.length; i++) {
-          const el = this.elements[i];
-          el.x = el.initialX + deltaX;
-          el.y = el.initialY + deltaY;
-        }
-        this.boundingBox = createBoundingBox(
-          this.x,
-          this.y,
-          this.width,
-          this.height
-        );
-        this.interactionManager.upsertHitbox(UIWINDOW_HITBOX_KEY, {
-          boundingBox: this.getBBox
-        });
-      });
-      __publicField(this, "mouseDown", (ev) => {
-        if (this.x === null || this.y === null || ev.buttons !== 1 || this.isDragging) {
-          return;
-        }
-        this.isDragging = true;
-        this.dragStartX = ev.clientX;
-        this.dragStartY = ev.clientY;
-        this.initialX = this.x;
-        this.initialY = this.y;
-        this.elements.forEach((el) => {
-          el.initialX = el.x;
-          el.initialY = el.y;
-        });
-      });
-      __publicField(this, "mouseUp", (_ev) => {
-        this.isDragging = false;
-      });
-    }
-  };
-}
-
-// src/mixins/with-event-handling.ts
-function withEventHandling(obj = class {
-}) {
-  return class extends obj {
-    constructor(...args) {
-      super(args);
-      __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
-        InteractionManager.INTERACTION_MANAGER_ID
-      ));
-    }
-  };
-}
-
 // src/models/base-object.ts
 var BaseObject = class {
   constructor() {
@@ -1152,6 +1088,8 @@ var BaseObject = class {
     this.height = height;
     this.bbox = createBoundingBox(this._x, this.y, this.width, this.height);
   }
+};
+var BaseObjectClass = class extends BaseObject {
 };
 
 // src/models/game-object.ts
@@ -1328,6 +1266,109 @@ function pivotComparator(p1, p2) {
   return p1.position.x === p2.position.x && p1.position.y === p2.position.y && p1.direction === p2.direction;
 }
 
+// src/mixins/with-dragging.ts
+var UIWINDOW_HITBOX_KEY = "uiwindow-dragging-hitbox";
+var DraggableObject = class extends BaseObject {
+  constructor(...args) {
+    super(...args);
+    __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
+      InteractionManager.INTERACTION_MANAGER_ID
+    ));
+    __publicField(this, "isDragging", false);
+    __publicField(this, "dragStartX", 0);
+    __publicField(this, "dragStartY", 0);
+    __publicField(this, "initialX", 0);
+    __publicField(this, "initialY", 0);
+    __publicField(this, "draggingId", UIWINDOW_HITBOX_KEY);
+    __publicField(this, "elements", []);
+    __publicField(this, "boundingBox", {
+      nw: { x: 0, y: 0 },
+      se: { x: 0, y: 0 }
+    });
+    __publicField(this, "registerDragging", (id) => {
+      if (this.canvas === null) {
+        return;
+      }
+      this.draggingId = id ?? UIWINDOW_HITBOX_KEY;
+      this.interactionManager.upsertHitbox(this.draggingId, {
+        getBoundingBox: this.getBBox,
+        callbacks: {
+          mousemove: this._mouseHover,
+          mousedown: this._mouseDown,
+          mouseup: this._mouseUp
+        },
+        color: this.interactionManager.colorHeap.getNext()
+      });
+    });
+    __publicField(this, "deregister", () => {
+      this.interactionManager.removeHitbox(this.draggingId);
+    });
+    __publicField(this, "getBBox", () => {
+      return createBoundingBox(this.x, this.y, this.width, this.height);
+    });
+    __publicField(this, "_mouseHover", (ev) => {
+      if (!this.isDragging) {
+        return;
+      }
+      const deltaX = ev.offsetX - this.dragStartX;
+      const deltaY = ev.offsetY - this.dragStartY;
+      this.x = this.initialX + deltaX;
+      this.y = this.initialY + deltaY;
+      for (let i = 0; i < this.elements.length; i++) {
+        const el = this.elements[i];
+        const initialX = el.initialX ?? el.x;
+        const initialY = el.initialY ?? el.y;
+        el.x = initialX + deltaX;
+        el.y = initialY + deltaY;
+      }
+      this.boundingBox = createBoundingBox(
+        this.x,
+        this.y,
+        this.width,
+        this.height
+      );
+      this.interactionManager.upsertHitbox(this.draggingId, {
+        getBoundingBox: this.getBBox
+      });
+    });
+    __publicField(this, "_mouseDown", (ev) => {
+      if (ev.buttons !== 1 || this.isDragging) {
+        return;
+      }
+      this.isDragging = true;
+      this.dragStartX = ev.clientX;
+      this.dragStartY = ev.clientY;
+      this.initialX = this.x;
+      this.initialY = this.y;
+      this.elements.forEach((el) => {
+        el.initialX = el.x;
+        el.initialY = el.y;
+      });
+      this.interactionManager.upsertHitbox(this.draggingId, {
+        data: { isDragging: true }
+      });
+    });
+    __publicField(this, "_mouseUp", (_ev) => {
+      this.isDragging = false;
+      this.interactionManager.upsertHitbox(this.draggingId, {
+        data: { isDragging: false }
+      });
+    });
+  }
+};
+
+// src/mixins/with-interaction-manager.ts
+function withInteractionManager(obj = BaseObjectClass) {
+  return class extends obj {
+    constructor(...args) {
+      super(...args);
+      __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
+        InteractionManager.INTERACTION_MANAGER_ID
+      ));
+    }
+  };
+}
+
 // src/ui/canvas/helpers/text.ts
 function getTextBBox(ctx, text, position) {
   const metrics = ctx.measureText(text);
@@ -1365,13 +1406,12 @@ var UIBUTTON_BACKGROUND_COLOR = { r: 100, g: 100, b: 100, a: 255 };
 var UIBUTTON_HOVER_COLOR = { r: 150, g: 150, b: 150, a: 255 };
 var UIBUTTON_ACTIVE_COLOR = { r: 200, g: 200, b: 200, a: 255 };
 var UIBUTTON_TEXT_COLOR = { r: 255, g: 255, b: 255, a: 255 };
-var ButtonBaseClass = class extends BaseObject {
-};
-var ButtonBase = class extends withEventHandling(ButtonBaseClass) {
-};
-var UIButton = class extends ButtonBase {
-  constructor(canvas, ctx) {
+var UIButton = class extends BaseObject {
+  constructor(canvas, ctx, hitBoxId) {
     super();
+    __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
+      InteractionManager.INTERACTION_MANAGER_ID
+    ));
     __publicField(this, "ctx");
     __publicField(this, "backgroundColor", UIBUTTON_BACKGROUND_COLOR);
     __publicField(this, "hoverColor", UIBUTTON_HOVER_COLOR);
@@ -1379,7 +1419,7 @@ var UIButton = class extends ButtonBase {
     __publicField(this, "activeColor", UIBUTTON_ACTIVE_COLOR);
     __publicField(this, "isHovering", false);
     __publicField(this, "layer", 50);
-    __publicField(this, "hitBoxKey", UIBUTTON_HITBOX_KEY);
+    __publicField(this, "hitBoxId", UIBUTTON_HITBOX_KEY);
     __publicField(this, "getBBox", () => {
       return createBoundingBox(this.x, this.y, this.width, this.height);
     });
@@ -1394,27 +1434,23 @@ var UIButton = class extends ButtonBase {
     });
     this.ctx = ctx;
     this.canvas = canvas;
+    this.hitBoxId = hitBoxId;
   }
-  async init(hitBoxId, layer = 50) {
+  async init(layer = 50) {
     await super.init();
     this.layer = layer;
-    this.hitBoxKey = hitBoxId ?? UIBUTTON_HITBOX_KEY;
-    this.interactionManager.upsertHitbox(this.hitBoxKey, {
+    this.interactionManager.upsertHitbox(this.hitBoxId, {
       callbacks: {
         mousemove: this.mouseMove,
         mouseout: this.mouseOut
       },
-      color: { a: 255, r: 2, g: 12, b: 21 },
+      color: this.interactionManager.colorHeap.getNext(),
       layer,
-      boundingBox: this.getBBox
+      getBoundingBox: this.getBBox
     });
   }
   async update(_deltaTime) {
     await super.update(_deltaTime);
-    this.interactionManager.upsertHitbox(UIBUTTON_HITBOX_KEY, {
-      layer: this.layer,
-      boundingBox: this.getBBox
-    });
   }
   clean(..._args) {
     super.clean();
@@ -1591,18 +1627,99 @@ var UIPanel = class extends GameObject {
     });
   }
 };
+
+// src/ui/controls/window.ts
+var HEADER_HEIGHT = 30;
+var UIWindow = class extends DraggableObject {
+  constructor(canvas, ctx) {
+    super();
+    __publicField(this, "ctx");
+    __publicField(this, "backgroundcolor", "rgba(50, 50, 50, 0.8)");
+    __publicField(this, "borderColor", "black");
+    __publicField(this, "borderWidth", 2);
+    __publicField(this, "textColor", "white");
+    __publicField(this, "title", "UI Window");
+    this.canvas = canvas;
+    this.ctx = ctx;
+    this.x = 100;
+    this.y = 100;
+    this.width = 300;
+    this.height = 200;
+  }
+  async init(_deltaTime, id, ..._args) {
+    this.registerDragging(id);
+  }
+  async update(_deltaTime) {
+  }
+  render() {
+    if (this.canvas === null || this.x === null || this.y === null || this.width === null || this.height === null) {
+      return;
+    }
+    this.ctx.fillStyle = this.backgroundcolor;
+    this.ctx.fillRect(this.x, this.y, this.width, this.height);
+    this.ctx.strokeStyle = this.borderColor;
+    this.ctx.lineWidth = this.borderWidth;
+    this.ctx.strokeRect(this.x, this.y, this.width, this.height);
+    this.renderWindowHeader(
+      this.ctx,
+      { x: this.x, y: this.y },
+      this.width,
+      HEADER_HEIGHT,
+      this.title,
+      true
+    );
+  }
+  clean() {
+    this.deregister();
+  }
+  renderWindowHeader(ctx, position, width, height, title, showCloseButton = true) {
+    ctx.fillStyle = "#333";
+    ctx.fillRect(position.x, position.y, width, height);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(position.x, position.y, width, height);
+    ctx.fillStyle = "white";
+    ctx.font = "12px Arial";
+    ctx.fillText(title, position.x + 10, position.y + 20);
+    if (showCloseButton) {
+      const buttonSize = 16;
+      ctx.fillStyle = "#ff5555";
+      ctx.fillRect(
+        position.x + width - buttonSize - 10,
+        position.y + 7,
+        buttonSize,
+        buttonSize
+      );
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        position.x + width - buttonSize - 10,
+        position.y + 7,
+        buttonSize,
+        buttonSize
+      );
+      ctx.fillStyle = "white";
+      ctx.font = "12px Arial";
+      ctx.fillText("X", position.x + width - buttonSize - 6, position.y + 20);
+    }
+  }
+};
 export {
   ASSETS_MANAGER_DI,
   AssetsManager,
   AudioController,
   BLUE,
   BaseObject,
+  BaseObjectClass,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  ColorHeap,
   DIContainer,
+  DraggableObject,
   GREEN,
   Game,
   GameObject,
+  HEADER_HEIGHT,
   InteractionManager,
   LinkedList,
   LinkedListNode,
@@ -1614,6 +1731,7 @@ export {
   UIButton,
   UILabel,
   UIPanel,
+  UIWindow,
   YELLOW,
   angleBetween,
   calculateEdgesPerpendiculars,
@@ -1647,7 +1765,6 @@ export {
   satCollision,
   toPrecisionNumber,
   updatePolygonShape,
-  withDragging,
-  withEventHandling
+  withInteractionManager
 };
 //# sourceMappingURL=hypertoroid.js.map

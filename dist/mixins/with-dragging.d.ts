@@ -1,15 +1,27 @@
-import { AnonymousClass } from "hypertoroid";
-import { BaseObject } from "../models/base-object";
-import { WithEventHandling } from "./with-event-handling";
-interface WithDragging {
+import { InteractionManager } from "../core";
+import { BaseObject, BoundingBox } from "../models";
+export type WithInitialPosition = {
+    initialX: number;
+    initialY: number;
+};
+type DraggableChild = BaseObject & Partial<WithInitialPosition>;
+export declare class DraggableObject extends BaseObject {
+    interactionManager: InteractionManager;
     isDragging: boolean;
     dragStartX: number;
     dragStartY: number;
     initialX: number;
     initialY: number;
-    registerDragging(): void;
-    deregister(): void;
+    draggingId: string;
+    elements: DraggableChild[];
+    boundingBox: BoundingBox<number>;
+    constructor(...args: any[]);
+    registerDragging: (id?: string) => void;
+    deregister: () => void;
+    getBBox: () => BoundingBox<number>;
+    _mouseHover: (ev: MouseEvent) => void;
+    _mouseDown: (ev: MouseEvent) => void;
+    _mouseUp: (_ev: MouseEvent) => void;
 }
-export declare function withDragging<T extends AnonymousClass<WithEventHandling & BaseObject>>(obj: T): T & AnonymousClass<WithDragging>;
 export {};
 //# sourceMappingURL=with-dragging.d.ts.map

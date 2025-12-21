@@ -1,10 +1,7 @@
-import { BaseObject, Color, GameCycle } from "../../models";
-declare class ButtonBaseClass extends BaseObject {
-}
-declare const ButtonBase_base: typeof ButtonBaseClass & import("../../models").AnonymousClass<import("../../mixins").WithEventHandling>;
-declare class ButtonBase extends ButtonBase_base {
-}
-export declare class UIButton extends ButtonBase implements GameCycle {
+import { InteractionManager } from "../../core";
+import { BaseObject, Color } from "../../models";
+export declare class UIButton extends BaseObject {
+    protected interactionManager: InteractionManager;
     protected ctx: CanvasRenderingContext2D;
     backgroundColor: Color;
     hoverColor: Color;
@@ -12,9 +9,9 @@ export declare class UIButton extends ButtonBase implements GameCycle {
     activeColor: Color;
     isHovering: boolean;
     layer: number;
-    hitBoxKey: string;
-    constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D);
-    init(hitBoxId?: string, layer?: number): Promise<void>;
+    hitBoxId: string;
+    constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, hitBoxId: string);
+    init(layer?: number): Promise<void>;
     update(_deltaTime: number): Promise<void>;
     clean(..._args: any): void;
     render(): void;
@@ -22,5 +19,4 @@ export declare class UIButton extends ButtonBase implements GameCycle {
     mouseMove: (ev: MouseEvent) => void;
     mouseOut: (_ev: MouseEvent) => void;
 }
-export {};
 //# sourceMappingURL=button.d.ts.map

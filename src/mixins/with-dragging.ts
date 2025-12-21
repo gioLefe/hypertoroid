@@ -1,119 +1,119 @@
-import { AnonymousClass, BoundingBox, createBoundingBox } from "hypertoroid";
-import { BaseObject } from "../models/base-object";
-import { WithEventHandling } from "./with-event-handling";
+import { DIContainer, InteractionManager } from "../core";
+import { createBoundingBox } from "../helpers";
+import { BaseObject, BoundingBox } from "../models";
 
-const UIWINDOW_HITBOX_KEY = "uiwindow-hitbox";
+const UIWINDOW_HITBOX_KEY = "uiwindow-dragging-hitbox";
 
-type WithInitialPosition = {
+export type WithInitialPosition = {
   initialX: number;
   initialY: number;
 };
+type DraggableChild = BaseObject & Partial<WithInitialPosition>;
 
-interface WithDragging {
-  isDragging: boolean;
-  dragStartX: number;
-  dragStartY: number;
-  initialX: number;
-  initialY: number;
-  registerDragging(): void;
-  deregister(): void;
-}
+export class DraggableObject extends BaseObject {
+  interactionManager = DIContainer.getInstance().resolve<InteractionManager>(
+    InteractionManager.INTERACTION_MANAGER_ID
+  );
 
-export function withDragging<
-  T extends AnonymousClass<WithEventHandling & BaseObject>,
->(obj: T): T & AnonymousClass<WithDragging> {
-  return class extends obj implements WithDragging {
-    isDragging = false;
-    dragStartX: number = 0;
-    dragStartY: number = 0;
-    initialX: number = 0;
-    initialY: number = 0;
+  isDragging = false;
+  dragStartX: number = 0;
+  dragStartY: number = 0;
+  initialX: number = 0;
+  initialY: number = 0;
+  draggingId: string = UIWINDOW_HITBOX_KEY;
 
-    override elements: (BaseObject & WithInitialPosition)[] = [];
+  override elements: DraggableChild[] = [];
 
-    boundingBox: BoundingBox<number> = {
-      nw: { x: 0, y: 0 },
-      se: { x: 0, y: 0 },
-    };
+  boundingBox: BoundingBox<number> = {
+    nw: { x: 0, y: 0 },
+    se: { x: 0, y: 0 },
+  };
 
-    constructor(...args: any[]) {
-      super(args);
+  constructor(...args: any[]) {
+    super(...(args as []));
+  }
+
+  registerDragging = (id?: string) => {
+    if (this.canvas === null) {
+      return;
+    }
+    this.draggingId = id ?? UIWINDOW_HITBOX_KEY;
+    this.interactionManager.upsertHitbox(this.draggingId, {
+      getBoundingBox: this.getBBox,
+      callbacks: {
+        mousemove: this._mouseHover,
+        mousedown: this._mouseDown,
+        mouseup: this._mouseUp,
+      },
+      color: this.interactionManager.colorHeap.getNext(),
+    });
+  };
+
+  deregister = () => {
+    this.interactionManager.removeHitbox(this.draggingId);
+  };
+
+  override getBBox = () => {
+    return createBoundingBox(this.x, this.y, this.width, this.height);
+  };
+
+  _mouseHover = (ev: MouseEvent): void => {
+    if (!this.isDragging) {
+      return;
+    }
+    // We are finally dragging, update position of element and sub-elements
+    const deltaX = ev.offsetX - this.dragStartX;
+    const deltaY = ev.offsetY - this.dragStartY;
+    this.x = this.initialX + deltaX;
+    this.y = this.initialY + deltaY;
+    for (let i = 0; i < this.elements.length; i++) {
+      const el = this.elements[i];
+      const initialX = el.initialX ?? el.x;
+      const initialY = el.initialY ?? el.y;
+      el.x = initialX + deltaX;
+      el.y = initialY + deltaY;
     }
 
-    registerDragging = () => {
-      if (this.canvas === null) {
-        return;
-      }
-      this.interactionManager.upsertHitbox(UIWINDOW_HITBOX_KEY, {
-        boundingBox: this.getBBox,
-        callbacks: {
-          mousemove: this.mouseHover,
-          mousedown: this.mouseDown,
-          mouseup: this.mouseUp,
-        },
-        color: { a: 255, r: 100, g: 100, b: 100 },
-      });
-    };
+    // Update boundingBox in the event Handler
+    this.boundingBox = createBoundingBox(
+      this.x,
+      this.y,
+      this.width,
+      this.height
+    );
+    this.interactionManager.upsertHitbox(this.draggingId, {
+      getBoundingBox: this.getBBox,
+    });
+  };
 
-    deregister = () => {
-      this.interactionManager.removeHitbox(UIWINDOW_HITBOX_KEY);
-    };
+  _mouseDown = (ev: MouseEvent): void => {
+    if (
+      ev.buttons !== 1 ||
+      this.isDragging
+    ) {
+      return;
+    }
+    this.isDragging = true;
+    this.dragStartX = ev.clientX;
+    this.dragStartY = ev.clientY;
+    this.initialX = this.x;
+    this.initialY = this.y;
 
-    override getBBox = () => {
-      return createBoundingBox(this.x, this.y, this.width, this.height);
-    };
+    this.elements.forEach((el) => {
+      el.initialX = el.x;
+      el.initialY = el.y;
+    });
 
-    private mouseHover = (ev: MouseEvent): void => {
-      if (!this.isDragging) {
-        return;
-      }
-      // We are finally dragging, update position of element and sub-elements
-      const deltaX = ev.offsetX - this.dragStartX;
-      const deltaY = ev.offsetY - this.dragStartY;
-      this.x = this.initialX + deltaX;
-      this.y = this.initialY + deltaY;
-      for (let i = 0; i < this.elements.length; i++) {
-        const el = this.elements[i];
-        el.x = el.initialX + deltaX;
-        el.y = el.initialY + deltaY;
-      }
+    this.interactionManager.upsertHitbox(this.draggingId, {
+      data: { isDragging: true },
+    });
+  };
 
-      // Update boundingBox in the event Handler
-      this.boundingBox = createBoundingBox(
-        this.x,
-        this.y,
-        this.width,
-        this.height
-      );
-      this.interactionManager.upsertHitbox(UIWINDOW_HITBOX_KEY, {
-        boundingBox: this.getBBox,
-      });
-    };
-
-    private mouseDown = (ev: MouseEvent): void => {
-      if (
-        this.x === null ||
-        this.y === null ||
-        ev.buttons !== 1 ||
-        this.isDragging
-      ) {
-        return;
-      }
-      this.isDragging = true;
-      this.dragStartX = ev.clientX;
-      this.dragStartY = ev.clientY;
-      this.initialX = this.x;
-      this.initialY = this.y;
-      // 
-
-      this.elements.forEach((el) => {
-        el.initialX = el.x;
-        el.initialY = el.y;
-      })
-    };
-
-    private mouseUp = (_ev: MouseEvent): void => {
-      this.isDragging = false;
-    };
+  _mouseUp = (_ev: MouseEvent): void => {
+    this.isDragging = false;
+    this.interactionManager.upsertHitbox(this.draggingId, {
+      data: { isDragging: false },
+    });
   };
 }
+// }

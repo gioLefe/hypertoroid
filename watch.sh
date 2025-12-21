@@ -11,8 +11,8 @@ PROJECT_DIR="/c/dev/hypertoroid"
 WATCH_EXTENSIONS="ts js json"
 
 # Parse command line arguments
-CLEAN_DIST=true
-ESBUILD_ARGS=""
+CLEAN_DIST=false
+ESBUILD_ARGS="--no-clean"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -21,9 +21,14 @@ while [[ $# -gt 0 ]]; do
             ESBUILD_ARGS="--no-clean"
             shift
             ;;
+        --clean)
+            CLEAN_DIST=true
+            ESBUILD_ARGS=""
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--no-clean]"
+            echo "Usage: $0 [--no-clean] [--clean]"
             exit 1
             ;;
     esac
@@ -82,7 +87,7 @@ last_checksum=$(get_files_checksum | md5sum)
 
 # Watch loop
 while true; do
-    sleep 3
+    sleep 1
     
     # Get current state
     current_checksum=$(get_files_checksum | md5sum)

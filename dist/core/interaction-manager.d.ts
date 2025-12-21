@@ -1,3 +1,4 @@
+import { ColorHeap } from "../helpers";
 import { BoundingBox, Vec2 } from "../models";
 import { Color } from "../models/color";
 import { EventType } from "./types/event-type";
@@ -9,6 +10,9 @@ export type EventCallback = Partial<{
 export type HitBoxColor = Color & {
     a: 255;
 };
+export type HitBoxData = {
+    isDragging: boolean;
+};
 /**
  * Unified hitbox + event definition.
  * Spatial hitbox with optional event callbacks and priority layer.
@@ -16,11 +20,12 @@ export type HitBoxColor = Color & {
 export type HitboxEvent = {
     id: string;
     layer?: number;
-    boundingBox?: () => BoundingBox<number> | undefined;
+    getBoundingBox?: () => BoundingBox<number> | undefined;
     hitTest?: HitTestFn;
     color?: HitBoxColor;
     image?: HTMLImageElement;
     callbacks?: EventCallback;
+    data?: Partial<HitBoxData>;
 };
 export type HitboxEventId = string;
 export declare class InteractionManager {
@@ -36,6 +41,7 @@ export declare class InteractionManager {
     private mouseOutCallback;
     private mouseDownTargetId;
     private mouseUpCallback;
+    colorHeap: ColorHeap;
     constructor(canvas: HTMLCanvasElement);
     registerEventListener(evType: EventType, options?: boolean | AddEventListenerOptions): void;
     /**
@@ -67,10 +73,10 @@ export declare class InteractionManager {
      * the original hitbox's mouseup callback is still invoked.
      */
     private handleMouseButtonRelease;
-    /** Handle mouse hover and mouseout across different hitboxes.
+    /** Handle mouse hover, dragging and mouseout across different hitboxes.
      * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
      * the original hitbox's mouseup callback is still invoked.
      */
-    private handleMouseOut;
+    private handleMouseMove;
 }
 //# sourceMappingURL=interaction-manager.d.ts.map

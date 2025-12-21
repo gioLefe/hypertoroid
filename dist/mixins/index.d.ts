@@ -1,3 +1,3 @@
 export * from "./with-dragging";
-export * from "./with-event-handling";
+export * from "./with-interaction-manager";
 //# sourceMappingURL=index.d.ts.map

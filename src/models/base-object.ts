@@ -5,7 +5,7 @@ import { Size2 } from "./size";
 import { Vec2 } from "./vec";
 
 export abstract class BaseObject implements GameCycle {
-  private _x: number = 0;
+  _x: number = 0;
   _y: number = 0;
   width: number = 0;
   height: number = 0;
@@ -15,6 +15,8 @@ export abstract class BaseObject implements GameCycle {
     se: { x: 0, y: 0 },
   };
   elements: BaseObject[] = [];
+
+  constructor() {}
 
   async init(..._args: any): Promise<any> {}
   async update(_deltaTime: number, ..._args: any): Promise<any> {}
@@ -63,3 +65,4 @@ export abstract class BaseObject implements GameCycle {
     this.bbox = createBoundingBox(this._x, this.y, this.width, this.height);
   }
 }
+export class BaseObjectClass extends BaseObject {}

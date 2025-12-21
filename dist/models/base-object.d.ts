@@ -3,13 +3,14 @@ import { GameCycle } from "./game-cycle";
 import { Size2 } from "./size";
 import { Vec2 } from "./vec";
 export declare abstract class BaseObject implements GameCycle {
-    private _x;
+    _x: number;
     _y: number;
     width: number;
     height: number;
     canvas: HTMLCanvasElement | null;
     bbox: BoundingBox<number>;
     elements: BaseObject[];
+    constructor();
     init(..._args: any): Promise<any>;
     update(_deltaTime: number, ..._args: any): Promise<any>;
     render(..._args: any): void;
@@ -26,5 +27,7 @@ export declare abstract class BaseObject implements GameCycle {
     setWidth(width: number): void;
     getHeight(): number;
     setHeight(height: number): void;
+}
+export declare class BaseObjectClass extends BaseObject {
 }
 //# sourceMappingURL=base-object.d.ts.map

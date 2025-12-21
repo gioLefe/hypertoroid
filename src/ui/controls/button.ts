@@ -1,6 +1,6 @@
+import { DIContainer, InteractionManager } from "../../core";
 import { createBoundingBox } from "../../helpers";
-import { withEventHandling } from "../../mixins";
-import { BaseObject, Color, colorToString, GameCycle } from "../../models";
+import { BaseObject, Color, colorToString } from "../../models";
 
 const UIBUTTON_HITBOX_KEY = "ui-button-hitbox";
 
@@ -9,10 +9,11 @@ const UIBUTTON_HOVER_COLOR: Color = { r: 150, g: 150, b: 150, a: 255 };
 const UIBUTTON_ACTIVE_COLOR: Color = { r: 200, g: 200, b: 200, a: 255 };
 const UIBUTTON_TEXT_COLOR: Color = { r: 255, g: 255, b: 255, a: 255 };
 
-class ButtonBaseClass extends BaseObject {}
-class ButtonBase extends withEventHandling(ButtonBaseClass) {}
-
-export class UIButton extends ButtonBase implements GameCycle {
+export class UIButton extends BaseObject {
+  protected interactionManager =
+    DIContainer.getInstance().resolve<InteractionManager>(
+      InteractionManager.INTERACTION_MANAGER_ID
+    );
   protected ctx: CanvasRenderingContext2D;
   backgroundColor: Color = UIBUTTON_BACKGROUND_COLOR;
   hoverColor: Color = UIBUTTON_HOVER_COLOR;
@@ -21,35 +22,35 @@ export class UIButton extends ButtonBase implements GameCycle {
 
   isHovering = false;
   layer: number = 50;
-  hitBoxKey: string = UIBUTTON_HITBOX_KEY;
+  hitBoxId: string = UIBUTTON_HITBOX_KEY;
 
-  constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    hitBoxId: string
+  ) {
     super();
     this.ctx = ctx;
     this.canvas = canvas;
+    this.hitBoxId = hitBoxId;
   }
 
-  override async init(hitBoxId?: string, layer: number = 50): Promise<void> {
+  override async init(layer: number = 50): Promise<void> {
     await super.init();
     this.layer = layer;
-    this.hitBoxKey = hitBoxId ?? UIBUTTON_HITBOX_KEY;
-    this.interactionManager.upsertHitbox(this.hitBoxKey, {
+    this.interactionManager.upsertHitbox(this.hitBoxId, {
       callbacks: {
         mousemove: this.mouseMove,
         mouseout: this.mouseOut,
       },
-      color: { a: 255, r: 2, g: 12, b: 21 },
+      color: this.interactionManager.colorHeap.getNext(),
       layer,
-      boundingBox: this.getBBox,
+      getBoundingBox: this.getBBox,
     });
   }
 
   override async update(_deltaTime: number): Promise<void> {
     await super.update(_deltaTime);
-    this.interactionManager.upsertHitbox(UIBUTTON_HITBOX_KEY, {
-      layer: this.layer,
-      boundingBox: this.getBBox,
-    });
   }
 
   override clean(..._args: any): void {
