@@ -30,7 +30,7 @@ export class UIWindow extends DraggableObject {
   ): Promise<any> {
     this.registerDragging(id);
   }
-  override async update(_deltaTime: number): Promise<any> {}
+  override update(_deltaTime: number): any {}
   override render() {
     if (
       this.canvas === null ||

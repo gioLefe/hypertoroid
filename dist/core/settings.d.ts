@@ -1,5 +1,6 @@
 export declare const CANVAS_WIDTH = "canvasW";
 export declare const CANVAS_HEIGHT = "canvasH";
+export declare const FPS_INSTANT = "fpsInstant";
 export declare class Settings {
     static SETTINGS_DI: string;
     private settings;

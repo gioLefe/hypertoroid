@@ -124,6 +124,26 @@ var AssetsManager = class {
   }
 };
 
+// src/core/settings.ts
+var CANVAS_WIDTH = "canvasW";
+var CANVAS_HEIGHT = "canvasH";
+var FPS_INSTANT = "fpsInstant";
+var Settings = class {
+  constructor() {
+    __publicField(this, "settings", /* @__PURE__ */ new Map());
+  }
+  get(key) {
+    if (!this.settings.has(key)) {
+      return void 0;
+    }
+    return this.settings.get(key);
+  }
+  set(key, value) {
+    this.settings = this.settings.set(key, value);
+  }
+};
+__publicField(Settings, "SETTINGS_DI", "settings");
+
 // src/models/game.ts
 var SCENE_MANAGER_DI = "SceneManager";
 var ASSETS_MANAGER_DI = "AsetsManager";
@@ -132,6 +152,9 @@ var Game = class {
     __publicField(this, "canvas");
     __publicField(this, "ctx");
     __publicField(this, "lastUpdateTime", 0);
+    __publicField(this, "cycleStartTime", 0);
+    __publicField(this, "cycleElapsed", 0);
+    __publicField(this, "elapsedTime", 0);
     __publicField(this, "deltaTime", 0);
     __publicField(this, "frameInterval", 0);
     __publicField(this, "diContainer", DIContainer.getInstance());
@@ -143,16 +166,21 @@ var Game = class {
       update: false,
       render: false
     });
-    __publicField(this, "gameLoop", async (timestamp) => {
-      if (this.lastUpdateTime === 0) {
-        this.lastUpdateTime = timestamp;
-      }
-      const elapsed = timestamp - this.lastUpdateTime;
-      if (elapsed > this.frameInterval) {
+    __publicField(this, "gameLoop", (timestamp) => {
+      this.elapsedTime = timestamp - this.lastUpdateTime;
+      if (this.elapsedTime > this.frameInterval) {
         this.deltaTime = this.frameInterval / 1e3;
-        this.lastUpdateTime = timestamp - elapsed % this.frameInterval;
-        await this.update(this.deltaTime);
+        this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
+        this.cycleStartTime = performance.now();
+        this.update(this.deltaTime);
         this.render(this.ctx);
+        this.cycleElapsed = performance.now() - this.cycleStartTime;
+        if (this.cycleElapsed > 0) {
+          this.settingsManager?.set(
+            FPS_INSTANT,
+            1e3 / this.cycleElapsed
+          );
+        }
       }
       requestAnimationFrame(this.gameLoop);
     });
@@ -200,7 +228,7 @@ var Game = class {
       this.settingsManager
     );
   }
-  async update(deltaTime) {
+  update(deltaTime) {
     if (this.debug.update) {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
@@ -209,9 +237,10 @@ var Game = class {
       console.warn("no scene to update");
       return;
     }
-    for (const scene of currentScenes) {
+    for (let i = 0; i < currentScenes.length; i++) {
+      const scene = currentScenes[i];
       try {
-        await scene.update(deltaTime);
+        scene.update(deltaTime);
       } catch (error) {
         console.error("Scene update failed:", error);
       }
@@ -227,7 +256,9 @@ var Game = class {
       console.warn("no scene to render");
       return;
     }
-    currentScenes.forEach((scene) => scene.render(this.ctx));
+    for (let i = 0; i < currentScenes.length; i++) {
+      currentScenes[i].render(this.ctx);
+    }
   }
   start() {
     this.lastUpdateTime = performance.now();
@@ -1007,25 +1038,6 @@ var SceneManager = class {
   }
 };
 
-// src/core/settings.ts
-var CANVAS_WIDTH = "canvasW";
-var CANVAS_HEIGHT = "canvasH";
-var Settings = class {
-  constructor() {
-    __publicField(this, "settings", /* @__PURE__ */ new Map());
-  }
-  get(key) {
-    if (!this.settings.has(key)) {
-      return void 0;
-    }
-    return this.settings.get(key);
-  }
-  set(key, value) {
-    this.settings = this.settings.set(key, value);
-  }
-};
-__publicField(Settings, "SETTINGS_DI", "settings");
-
 // src/models/base-object.ts
 var BaseObject = class {
   constructor() {
@@ -1045,7 +1057,7 @@ var BaseObject = class {
   }
   async init(..._args) {
   }
-  async update(_deltaTime, ..._args) {
+  update(_deltaTime, ..._args) {
   }
   render(..._args) {
   }
@@ -1109,7 +1121,7 @@ var GameObject = class {
   }
   async init(..._args) {
   }
-  async update(_deltaTime, ..._args) {
+  update(_deltaTime, ..._args) {
   }
   render(..._args) {
   }
@@ -1449,8 +1461,8 @@ var UIButton = class extends BaseObject {
       getBoundingBox: this.getBBox
     });
   }
-  async update(_deltaTime) {
-    await super.update(_deltaTime);
+  update(_deltaTime) {
+    super.update(_deltaTime);
   }
   clean(..._args) {
     super.clean();
@@ -1481,7 +1493,7 @@ var UILabel = class extends BaseObject {
   }
   async init() {
   }
-  async update() {
+  update() {
     if (this.text === void 0 || this.ctx === void 0) {
       return;
     }
@@ -1577,13 +1589,17 @@ var UIPanel = class extends GameObject {
   async init(...args) {
     super.init(args);
   }
-  async update(deltaTime, ...args) {
+  update(deltaTime, ...args) {
     super.update(deltaTime, args);
-    this.items.forEach((i) => i.update(deltaTime, args));
+    for (let i = 0; i < this.items.length; i++) {
+      this.items[i].update(deltaTime, args);
+    }
   }
   clean(...args) {
     super.clean(args);
-    this.items.forEach((i) => i.clean(args));
+    for (let i = 0; i < this.items.length; i++) {
+      this.items[i].clean(args);
+    }
   }
   render(...args) {
     if (this.fillStyle !== void 0) {
@@ -1649,7 +1665,7 @@ var UIWindow = class extends DraggableObject {
   async init(_deltaTime, id, ..._args) {
     this.registerDragging(id);
   }
-  async update(_deltaTime) {
+  update(_deltaTime) {
   }
   render() {
     if (this.canvas === null || this.x === null || this.y === null || this.width === null || this.height === null) {
@@ -1716,6 +1732,7 @@ export {
   ColorHeap,
   DIContainer,
   DraggableObject,
+  FPS_INSTANT,
   GREEN,
   Game,
   GameObject,

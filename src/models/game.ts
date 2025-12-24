@@ -6,6 +6,7 @@ import {
   AudioController,
   AssetsManager,
 } from "../core";
+import { FPS_INSTANT } from "../core/settings";
 import { AssetsHandler } from "../core/types/assets-handler";
 import { GameCycle } from "./game-cycle";
 
@@ -16,11 +17,14 @@ export abstract class Game implements GameCycle {
   protected canvas: HTMLCanvasElement;
   protected ctx: CanvasRenderingContext2D;
 
-  private lastUpdateTime: number = 0;
+  private lastUpdateTime: DOMHighResTimeStamp = 0;
+  private cycleStartTime: DOMHighResTimeStamp = 0;
+  private cycleElapsed: DOMHighResTimeStamp = 0;
+  private elapsedTime: DOMHighResTimeStamp = 0;
   private deltaTime: number = 0;
   private frameInterval: number = 0;
-  protected diContainer = DIContainer.getInstance();
 
+  protected diContainer = DIContainer.getInstance();
   protected sceneManager: SceneHandler | undefined;
   protected assetsManager: AssetsHandler | undefined;
   protected settingsManager: Settings | undefined;
@@ -89,7 +93,7 @@ export abstract class Game implements GameCycle {
     );
   }
 
-  async update(deltaTime: number): Promise<void> {
+  update(deltaTime: number): void {
     if (this.debug.update) {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
@@ -100,9 +104,10 @@ export abstract class Game implements GameCycle {
       return;
     }
 
-    for (const scene of currentScenes) {
+    for (let i = 0; i < currentScenes.length; i++) {
+      const scene = currentScenes[i];
       try {
-        await scene.update(deltaTime);
+        scene.update(deltaTime);
       } catch (error) {
         console.error("Scene update failed:", error);
       }
@@ -121,24 +126,32 @@ export abstract class Game implements GameCycle {
       return;
     }
 
-    currentScenes.forEach((scene) => scene.render(this.ctx));
+    for (let i = 0; i < currentScenes.length; i++) {
+      currentScenes[i].render(this.ctx);
+    }
   }
 
-  gameLoop = async (timestamp: number): Promise<void> => {
-    if (this.lastUpdateTime === 0) {
-      this.lastUpdateTime = timestamp;
-    }
-
-    const elapsed = timestamp - this.lastUpdateTime;
-
-    if (elapsed > this.frameInterval) {
+  gameLoop = (timestamp: DOMHighResTimeStamp): void => {
+    this.elapsedTime = timestamp - this.lastUpdateTime;
+    if (this.elapsedTime > this.frameInterval) {
       this.deltaTime = this.frameInterval / 1000;
 
       // Account for frame timing drift
-      this.lastUpdateTime = timestamp - (elapsed % this.frameInterval);
+      this.lastUpdateTime = timestamp - (this.elapsedTime % this.frameInterval);
 
-      await this.update(this.deltaTime);
+      this.cycleStartTime = performance.now();
+
+      this.update(this.deltaTime);
       this.render(this.ctx);
+
+      this.cycleElapsed = performance.now() - this.cycleStartTime;
+
+      if (this.cycleElapsed > 0) {
+        this.settingsManager?.set<number>(
+          FPS_INSTANT,
+          1000 / this.cycleElapsed
+        );
+      }
     }
     requestAnimationFrame(this.gameLoop);
   };

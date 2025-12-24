@@ -12,7 +12,7 @@ export declare class UIButton extends BaseObject {
     hitBoxId: string;
     constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, hitBoxId: string);
     init(layer?: number): Promise<void>;
-    update(_deltaTime: number): Promise<void>;
+    update(_deltaTime: number): void;
     clean(..._args: any): void;
     render(): void;
     getBBox: () => import("../../models").BoundingBox<number>;

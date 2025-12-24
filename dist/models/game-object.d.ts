@@ -12,7 +12,7 @@ export declare abstract class GameObject<T = GraphicContext> implements GameCycl
     protected direction: number;
     constructor(ctx: T);
     init(..._args: any): Promise<void>;
-    update(_deltaTime: number, ..._args: any): Promise<void>;
+    update(_deltaTime: number, ..._args: any): void;
     render(..._args: any): void;
     clean(..._args: any): void;
     setPosition(value: Vec2<number>): void;

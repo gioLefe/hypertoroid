@@ -1,6 +1,6 @@
 {
   "name": "hypertoroid",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "./dist/hypertoroid.js",
   "types": "./dist/hypertoroid.d.ts",
   "type": "module",

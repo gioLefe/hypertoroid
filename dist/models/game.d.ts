@@ -7,6 +7,9 @@ export declare abstract class Game implements GameCycle {
     protected canvas: HTMLCanvasElement;
     protected ctx: CanvasRenderingContext2D;
     private lastUpdateTime;
+    private cycleStartTime;
+    private cycleElapsed;
+    private elapsedTime;
     private deltaTime;
     private frameInterval;
     protected diContainer: DIContainer;
@@ -17,9 +20,9 @@ export declare abstract class Game implements GameCycle {
     constructor(canvas: HTMLCanvasElement, canvasWidth: number, canvasHeight: number, fps?: number);
     clean(..._args: any): void;
     init(): Promise<void>;
-    update(deltaTime: number): Promise<void>;
+    update(deltaTime: number): void;
     render(..._args: any): void;
-    gameLoop: (timestamp: number) => Promise<void>;
+    gameLoop: (timestamp: DOMHighResTimeStamp) => void;
     start(): void;
 }
 //# sourceMappingURL=game.d.ts.map

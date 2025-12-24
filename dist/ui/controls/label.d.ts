@@ -9,7 +9,7 @@ export declare class UILabel extends BaseObject {
     protected textStrokeStyle: FillStrokeStyle;
     constructor();
     init(): Promise<void>;
-    update(): Promise<void>;
+    update(): void;
     render(): void;
     clean(): void;
     setText(text: string): void;

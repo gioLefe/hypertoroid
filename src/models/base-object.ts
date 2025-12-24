@@ -19,7 +19,7 @@ export abstract class BaseObject implements GameCycle {
   constructor() {}
 
   async init(..._args: any): Promise<any> {}
-  async update(_deltaTime: number, ..._args: any): Promise<any> {}
+  update(_deltaTime: number, ..._args: any): any {}
   render(..._args: any) {}
   clean(..._args: any) {}
 

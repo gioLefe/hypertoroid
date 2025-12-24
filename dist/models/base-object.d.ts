@@ -12,7 +12,7 @@ export declare abstract class BaseObject implements GameCycle {
     elements: BaseObject[];
     constructor();
     init(..._args: any): Promise<any>;
-    update(_deltaTime: number, ..._args: any): Promise<any>;
+    update(_deltaTime: number, ..._args: any): any;
     render(..._args: any): void;
     clean(..._args: any): void;
     set x(v: number);

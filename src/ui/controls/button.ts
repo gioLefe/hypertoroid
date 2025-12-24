@@ -49,8 +49,8 @@ export class UIButton extends BaseObject {
     });
   }
 
-  override async update(_deltaTime: number): Promise<void> {
-    await super.update(_deltaTime);
+  override update(_deltaTime: number): void {
+    super.update(_deltaTime);
   }
 
   override clean(..._args: any): void {

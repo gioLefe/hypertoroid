@@ -9,7 +9,7 @@ export declare class UIWindow extends DraggableObject {
     protected title: string;
     constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D);
     init(_deltaTime: number, id: string, ..._args: []): Promise<any>;
-    update(_deltaTime: number): Promise<any>;
+    update(_deltaTime: number): any;
     render(): void;
     clean(): void;
     private renderWindowHeader;

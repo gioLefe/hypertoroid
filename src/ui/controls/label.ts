@@ -14,7 +14,7 @@ export class UILabel extends BaseObject {
   }
 
   override async init() {}
-  override async update() {
+  override update() {
     if (this.text === undefined || this.ctx === undefined) {
       return;
     }
