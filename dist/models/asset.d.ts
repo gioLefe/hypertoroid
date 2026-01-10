@@ -7,8 +7,8 @@ export type SoundAsset = {
     source: ArrayBuffer;
     tags: Tag[];
 };
-export type GenericFileAsset = {
-    source: any;
+export type GenericFileAsset<T = any> = {
+    source: T;
     tags: Tag[];
 };
 //# sourceMappingURL=asset.d.ts.map

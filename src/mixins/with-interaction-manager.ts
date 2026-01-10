@@ -10,7 +10,7 @@ export function withInteractionManager<T extends Constructor<BaseObject>>(
 ): T & Constructor<hasInteractionManager> {
   return class extends obj implements hasInteractionManager {
     interactionManager = DIContainer.getInstance().resolve<InteractionManager>(
-      InteractionManager.INTERACTION_MANAGER_ID
+      InteractionManager.INSTANCE_ID
     );
 
     constructor(...args: any[]) {

@@ -5,7 +5,7 @@ import { GameAssetRequest } from "./types/game-asset";
 export class AssetsManager implements AssetsHandler {
   assets: Map<string, ImageAsset | SoundAsset | GenericFileAsset> = new Map();
 
-  add(assetRequests: GameAssetRequest[]): Promise<void>[] {
+  add(assetRequests: GameAssetRequest[]): Promise<GameAssetRequest>[] {
     return assetRequests.map((request) =>
       this.createObjectPromise(this, request)
     );
@@ -52,46 +52,34 @@ export class AssetsManager implements AssetsHandler {
     this.assets.delete(oldId);
   }
 
-  /**
-   * Get all pixel data from an image asset
-   * @param assetId - The ID of the image asset
-   * @returns ImageData object or null if asset not found or not an image
-   */
-  getImageData(assetId: string): ImageData | null {
-    const asset = this.assets.get(assetId);
-    if (
-      !asset ||
-      !("source" in asset) ||
-      !(asset.source instanceof HTMLImageElement)
-    ) {
-      return null;
-    }
+  async ensureLoaded<T extends (ImageAsset | SoundAsset | GenericFileAsset), K extends GameAssetRequest>(
+    requests: K[]
+  ): Promise<T[]> {
+    const loadPromises: Promise<GameAssetRequest>[] = [];
+    requests.forEach((request) => {
+      if (this.assets.has(request.id) === false) {
+        loadPromises.push(this.createObjectPromise(this, request));
+      }
+    });
+    await Promise.allSettled(loadPromises);
 
-    const image = asset.source as HTMLImageElement;
-
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) {
-      return null;
-    }
-
-    canvas.width = image.width;
-    canvas.height = image.height;
-    ctx.drawImage(image, 0, 0);
-
-    return ctx.getImageData(0, 0, image.width, image.height);
+    return Promise.resolve(
+      requests.map(
+        (request) =>
+          this.assets.get(request.id) as T
+      )
+    );
   }
 
   private createObjectPromise(
     assetManagerHandle: this,
     assetRequest: GameAssetRequest
-  ): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
+  ): Promise<GameAssetRequest> {
+    return new Promise<GameAssetRequest>((resolve, reject) => {
       let obj: HTMLImageElement;
 
       let responseType: XMLHttpRequestResponseType;
-      switch (assetRequest.type) {
+      switch (assetRequest.assetType) {
         case "AUDIO":
           // generic raw binary data buffer -> https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer
           responseType = "arraybuffer";
@@ -103,7 +91,7 @@ export class AssetsManager implements AssetsHandler {
           responseType = "";
       }
 
-      switch (assetRequest.type) {
+      switch (assetRequest.assetType) {
         case "TEXT":
         case "JSON":
         case "AUDIO":
@@ -111,12 +99,13 @@ export class AssetsManager implements AssetsHandler {
           request.open("GET", assetRequest.path, true);
           request.responseType = responseType;
           request.onload = function () {
-            assetManagerHandle.assets.set(assetRequest.id, {
+            const result = {
               source: request.response,
               tags: [],
               ...assetRequest,
-            });
-            return resolve();
+            };
+            assetManagerHandle.assets.set(assetRequest.id, result);
+            return resolve(result);
           };
           request.onerror = function () {
             reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
@@ -126,19 +115,21 @@ export class AssetsManager implements AssetsHandler {
         case "IMAGE":
           obj = new Image();
           obj.onload = function () {
-            assetManagerHandle.assets.set(assetRequest.id, {
+            const result = {
               source: obj as HTMLImageElement,
               tags: [],
               ...assetRequest,
-            });
-            return resolve();
+            };
+            assetManagerHandle.assets.set(assetRequest.id, result);
+            return resolve(result);
           };
           obj.onerror = function () {
             reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
           };
           obj.src = assetRequest.path;
           break;
-          default: reject(`unsupported asset type ${assetRequest.type}`);
+        default:
+          reject(`unsupported asset type ${assetRequest.assetType}`);
       }
     });
   }

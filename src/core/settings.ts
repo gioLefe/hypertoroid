@@ -1,6 +1,6 @@
 export const CANVAS_WIDTH = "canvasW";
 export const CANVAS_HEIGHT = "canvasH";
-export const FPS_INSTANT = "fpsInstant";
+export const GAME_LOOP_TIME = "gameLoopTime";
 
 export class Settings {
   static SETTINGS_DI = "settings";

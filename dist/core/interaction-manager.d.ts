@@ -29,7 +29,7 @@ export type HitboxEvent = {
 };
 export type HitboxEventId = string;
 export declare class InteractionManager {
-    static INTERACTION_MANAGER_ID: string;
+    static INSTANCE_ID: string;
     private canvas;
     private hitboxEvents;
     private hitboxArray;

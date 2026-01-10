@@ -47,32 +47,25 @@ var AssetsManager = class {
     this.assets.set(newId, asset);
     this.assets.delete(oldId);
   }
-  /**
-   * Get all pixel data from an image asset
-   * @param assetId - The ID of the image asset
-   * @returns ImageData object or null if asset not found or not an image
-   */
-  getImageData(assetId) {
-    const asset = this.assets.get(assetId);
-    if (!asset || !("source" in asset) || !(asset.source instanceof HTMLImageElement)) {
-      return null;
-    }
-    const image = asset.source;
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      return null;
-    }
-    canvas.width = image.width;
-    canvas.height = image.height;
-    ctx.drawImage(image, 0, 0);
-    return ctx.getImageData(0, 0, image.width, image.height);
+  async ensureLoaded(requests) {
+    const loadPromises = [];
+    requests.forEach((request) => {
+      if (this.assets.has(request.id) === false) {
+        loadPromises.push(this.createObjectPromise(this, request));
+      }
+    });
+    await Promise.allSettled(loadPromises);
+    return Promise.resolve(
+      requests.map(
+        (request) => this.assets.get(request.id)
+      )
+    );
   }
   createObjectPromise(assetManagerHandle, assetRequest) {
     return new Promise((resolve, reject) => {
       let obj;
       let responseType;
-      switch (assetRequest.type) {
+      switch (assetRequest.assetType) {
         case "AUDIO":
           responseType = "arraybuffer";
           break;
@@ -82,7 +75,7 @@ var AssetsManager = class {
         default:
           responseType = "";
       }
-      switch (assetRequest.type) {
+      switch (assetRequest.assetType) {
         case "TEXT":
         case "JSON":
         case "AUDIO":
@@ -90,12 +83,13 @@ var AssetsManager = class {
           request.open("GET", assetRequest.path, true);
           request.responseType = responseType;
           request.onload = function() {
-            assetManagerHandle.assets.set(assetRequest.id, {
+            const result = {
               source: request.response,
               tags: [],
               ...assetRequest
-            });
-            return resolve();
+            };
+            assetManagerHandle.assets.set(assetRequest.id, result);
+            return resolve(result);
           };
           request.onerror = function() {
             reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
@@ -105,12 +99,13 @@ var AssetsManager = class {
         case "IMAGE":
           obj = new Image();
           obj.onload = function() {
-            assetManagerHandle.assets.set(assetRequest.id, {
+            const result = {
               source: obj,
               tags: [],
               ...assetRequest
-            });
-            return resolve();
+            };
+            assetManagerHandle.assets.set(assetRequest.id, result);
+            return resolve(result);
           };
           obj.onerror = function() {
             reject(`cannot load ${assetRequest.id} at ${assetRequest.path}`);
@@ -118,7 +113,7 @@ var AssetsManager = class {
           obj.src = assetRequest.path;
           break;
         default:
-          reject(`unsupported asset type ${assetRequest.type}`);
+          reject(`unsupported asset type ${assetRequest.assetType}`);
       }
     });
   }
@@ -127,7 +122,7 @@ var AssetsManager = class {
 // src/core/settings.ts
 var CANVAS_WIDTH = "canvasW";
 var CANVAS_HEIGHT = "canvasH";
-var FPS_INSTANT = "fpsInstant";
+var GAME_LOOP_TIME = "gameLoopTime";
 var Settings = class {
   constructor() {
     __publicField(this, "settings", /* @__PURE__ */ new Map());
@@ -155,11 +150,11 @@ var Game = class {
     __publicField(this, "cycleStartTime", 0);
     __publicField(this, "cycleElapsed", 0);
     __publicField(this, "elapsedTime", 0);
-    __publicField(this, "deltaTime", 0);
     __publicField(this, "frameInterval", 0);
+    __publicField(this, "fixedDeltaTime", 0);
     __publicField(this, "diContainer", DIContainer.getInstance());
     __publicField(this, "sceneManager");
-    __publicField(this, "assetsManager");
+    __publicField(this, "assetsManager", new AssetsManager());
     __publicField(this, "settingsManager");
     __publicField(this, "debug", {
       init: false,
@@ -169,17 +164,13 @@ var Game = class {
     __publicField(this, "gameLoop", (timestamp) => {
       this.elapsedTime = timestamp - this.lastUpdateTime;
       if (this.elapsedTime > this.frameInterval) {
-        this.deltaTime = this.frameInterval / 1e3;
-        this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
         this.cycleStartTime = performance.now();
-        this.update(this.deltaTime);
+        this.update(this.fixedDeltaTime);
         this.render(this.ctx);
+        this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
         this.cycleElapsed = performance.now() - this.cycleStartTime;
         if (this.cycleElapsed > 0) {
-          this.settingsManager?.set(
-            FPS_INSTANT,
-            1e3 / this.cycleElapsed
-          );
+          this.settingsManager?.set(GAME_LOOP_TIME, this.cycleElapsed);
         }
       }
       requestAnimationFrame(this.gameLoop);
@@ -196,9 +187,8 @@ var Game = class {
       throw Error("ctx is null");
     }
     this.ctx = context;
-    this.lastUpdateTime = 0;
-    this.deltaTime = 0;
     this.frameInterval = 1e3 / fps;
+    this.fixedDeltaTime = this.frameInterval / 1e3;
     this.init();
   }
   clean(..._args) {
@@ -209,7 +199,6 @@ var Game = class {
       console.log(`%c *** Init`, `background:#020; color:#adad00`);
     }
     this.sceneManager = new SceneManager();
-    this.assetsManager = new AssetsManager();
     this.settingsManager = new Settings();
     this.diContainer.register(
       SCENE_MANAGER_DI,
@@ -397,7 +386,8 @@ function drawRotated(ctx, canvasW, canvasH, img, degrees) {
 var ColorHeap = class {
   constructor() {
     __publicField(this, "freedColors", []);
-    __publicField(this, "nextColor", { r: 1, g: 0, b: 0, a: 255 });
+    // private nextColor: HitBoxColor = { r: 1, g: 0, b: 0, a: 255 };
+    __publicField(this, "nextColor", { r: 255, g: 255, b: 255, a: 255 });
   }
   getNext() {
     let color = this.freedColors.shift();
@@ -405,14 +395,14 @@ var ColorHeap = class {
       return color;
     }
     color = { ...this.nextColor };
-    this.nextColor.r += 1;
-    if (this.nextColor.r > 255) {
-      this.nextColor.r = 0;
-      this.nextColor.g += 1;
-      if (this.nextColor.g > 255) {
-        this.nextColor.g = 0;
-        this.nextColor.b += 1;
-        if (this.nextColor.b > 255) {
+    this.nextColor.r -= 1;
+    if (this.nextColor.r < 0) {
+      this.nextColor.r = 255;
+      this.nextColor.g -= 1;
+      if (this.nextColor.g < 0) {
+        this.nextColor.g = 255;
+        this.nextColor.b -= 1;
+        if (this.nextColor.b < 0) {
           throw new Error("Ran out of unique colors");
         }
       }
@@ -420,6 +410,20 @@ var ColorHeap = class {
     return color;
   }
 };
+
+// src/helpers/debounce.ts
+function debounce(func, delay) {
+  let timeoutId = null;
+  return function(...args) {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      func.apply(this, args);
+      timeoutId = null;
+    }, delay);
+  };
+}
 
 // src/helpers/math.ts
 function getVectorPerpendicular(axis) {
@@ -704,6 +708,18 @@ function satCollision(polygonA, polygonB) {
   return true;
 }
 
+// src/helpers/throttle.ts
+function throttle(func, limit) {
+  let inThrottle = false;
+  return function(...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
 // src/models/color.ts
 var RED = { r: 255, g: 0, b: 0, a: 255 };
 var GREEN = { r: 0, g: 255, b: 0, a: 255 };
@@ -866,6 +882,11 @@ var InteractionManager = class {
   // CRUD
   upsertHitbox(id, options) {
     const existing = this.hitboxEvents.get(id);
+    const nextcolor = options.color ?? existing?.color;
+    console.log(
+      `%c*upserting hitbox ${id}, color: rgba(${nextcolor?.r}, ${nextcolor?.g}, ${nextcolor?.b}, ${nextcolor?.a})`,
+      `background:rgb(1,1,0); color:rgba(${nextcolor?.r}, ${nextcolor?.g}, ${nextcolor?.b}, ${nextcolor?.a})`
+    );
     this.hitboxEvents.set(id, {
       id,
       layer: options.layer ?? existing?.layer ?? 0,
@@ -971,7 +992,7 @@ var InteractionManager = class {
     });
   }
 };
-__publicField(InteractionManager, "INTERACTION_MANAGER_ID", "InteractionManager");
+__publicField(InteractionManager, "INSTANCE_ID", "InteractionManager");
 
 // src/core/scene-manager.ts
 var SceneManager = class {
@@ -1284,7 +1305,7 @@ var DraggableObject = class extends BaseObject {
   constructor(...args) {
     super(...args);
     __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
-      InteractionManager.INTERACTION_MANAGER_ID
+      InteractionManager.INSTANCE_ID
     ));
     __publicField(this, "isDragging", false);
     __publicField(this, "dragStartX", 0);
@@ -1293,10 +1314,6 @@ var DraggableObject = class extends BaseObject {
     __publicField(this, "initialY", 0);
     __publicField(this, "draggingId", UIWINDOW_HITBOX_KEY);
     __publicField(this, "elements", []);
-    __publicField(this, "boundingBox", {
-      nw: { x: 0, y: 0 },
-      se: { x: 0, y: 0 }
-    });
     __publicField(this, "registerDragging", (id) => {
       if (this.canvas === null) {
         return;
@@ -1333,15 +1350,6 @@ var DraggableObject = class extends BaseObject {
         el.x = initialX + deltaX;
         el.y = initialY + deltaY;
       }
-      this.boundingBox = createBoundingBox(
-        this.x,
-        this.y,
-        this.width,
-        this.height
-      );
-      this.interactionManager.upsertHitbox(this.draggingId, {
-        getBoundingBox: this.getBBox
-      });
     });
     __publicField(this, "_mouseDown", (ev) => {
       if (ev.buttons !== 1 || this.isDragging) {
@@ -1375,7 +1383,7 @@ function withInteractionManager(obj = BaseObjectClass) {
     constructor(...args) {
       super(...args);
       __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
-        InteractionManager.INTERACTION_MANAGER_ID
+        InteractionManager.INSTANCE_ID
       ));
     }
   };
@@ -1422,7 +1430,7 @@ var UIButton = class extends BaseObject {
   constructor(canvas, ctx, hitBoxId) {
     super();
     __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
-      InteractionManager.INTERACTION_MANAGER_ID
+      InteractionManager.INSTANCE_ID
     ));
     __publicField(this, "ctx");
     __publicField(this, "backgroundColor", UIBUTTON_BACKGROUND_COLOR);
@@ -1732,7 +1740,7 @@ export {
   ColorHeap,
   DIContainer,
   DraggableObject,
-  FPS_INSTANT,
+  GAME_LOOP_TIME,
   GREEN,
   Game,
   GameObject,
@@ -1760,6 +1768,7 @@ export {
   createSquare,
   createTriangle,
   createVector,
+  debounce,
   diffVectors,
   dotProduct,
   drawRotated,
@@ -1780,6 +1789,7 @@ export {
   renderPolygon,
   rotatePolygon,
   satCollision,
+  throttle,
   toPrecisionNumber,
   updatePolygonShape,
   withInteractionManager

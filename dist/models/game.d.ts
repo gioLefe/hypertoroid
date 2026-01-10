@@ -10,11 +10,11 @@ export declare abstract class Game implements GameCycle {
     private cycleStartTime;
     private cycleElapsed;
     private elapsedTime;
-    private deltaTime;
     private frameInterval;
+    private readonly fixedDeltaTime;
     protected diContainer: DIContainer;
     protected sceneManager: SceneHandler | undefined;
-    protected assetsManager: AssetsHandler | undefined;
+    protected assetsManager: AssetsHandler;
     protected settingsManager: Settings | undefined;
     private debug;
     constructor(canvas: HTMLCanvasElement, canvasWidth: number, canvasHeight: number, fps?: number);

@@ -12,7 +12,7 @@ const UIBUTTON_TEXT_COLOR: Color = { r: 255, g: 255, b: 255, a: 255 };
 export class UIButton extends BaseObject {
   protected interactionManager =
     DIContainer.getInstance().resolve<InteractionManager>(
-      InteractionManager.INTERACTION_MANAGER_ID
+      InteractionManager.INSTANCE_ID
     );
   protected ctx: CanvasRenderingContext2D;
   backgroundColor: Color = UIBUTTON_BACKGROUND_COLOR;

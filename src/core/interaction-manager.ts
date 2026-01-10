@@ -54,7 +54,7 @@ export type HitboxEvent = {
 export type HitboxEventId = string;
 
 export class InteractionManager {
-  static INTERACTION_MANAGER_ID = "InteractionManager";
+  static INSTANCE_ID = "InteractionManager";
 
   private canvas: HTMLCanvasElement;
   private hitboxEvents = new Map<HitboxEventId, HitboxEvent>();
@@ -119,6 +119,11 @@ export class InteractionManager {
   // CRUD
   upsertHitbox(id: string, options: Partial<HitboxEvent>): void {
     const existing = this.hitboxEvents.get(id);
+    const nextcolor = options.color ?? existing?.color;
+    console.log(
+      `%c*upserting hitbox ${id}, color: rgba(${nextcolor?.r}, ${nextcolor?.g}, ${nextcolor?.b}, ${nextcolor?.a})`,
+      `background:rgb(1,1,0); color:rgba(${nextcolor?.r}, ${nextcolor?.g}, ${nextcolor?.b}, ${nextcolor?.a})`
+    );
     this.hitboxEvents.set(id, {
       id,
       layer: options.layer ?? existing?.layer ?? 0,

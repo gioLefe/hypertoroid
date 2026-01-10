@@ -1,5 +1,5 @@
 import { InteractionManager } from "../core";
-import { BaseObject, BoundingBox } from "../models";
+import { BaseObject } from "../models";
 export type WithInitialPosition = {
     initialX: number;
     initialY: number;
@@ -14,11 +14,10 @@ export declare class DraggableObject extends BaseObject {
     initialY: number;
     draggingId: string;
     elements: DraggableChild[];
-    boundingBox: BoundingBox<number>;
     constructor(...args: any[]);
     registerDragging: (id?: string) => void;
     deregister: () => void;
-    getBBox: () => BoundingBox<number>;
+    getBBox: () => import("../models").BoundingBox<number>;
     _mouseHover: (ev: MouseEvent) => void;
     _mouseDown: (ev: MouseEvent) => void;
     _mouseUp: (_ev: MouseEvent) => void;

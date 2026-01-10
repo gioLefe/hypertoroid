@@ -1,1 +1,1 @@
-export type GameAssetRequest = { id: string; path: string; type: "IMAGE" | "AUDIO" | "JSON" | "TEXT"};
+export type GameAssetRequest = { id: string; path: string; assetType: "IMAGE" | "AUDIO" | "JSON" | "TEXT"};

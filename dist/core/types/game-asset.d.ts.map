@@ -1,1 +1,1 @@
-{"version":3,"file":"game-asset.d.ts","sourceRoot":"","sources":["../../../src/core/types/game-asset.ts"],"names":[],"mappings":"AAAA,MAAM,MAAM,gBAAgB,GAAG;IAAE,EAAE,EAAE,MAAM,CAAC;IAAC,IAAI,EAAE,MAAM,CAAC;IAAC,IAAI,EAAE,OAAO,GAAG,OAAO,GAAG,MAAM,GAAG,MAAM,CAAA;CAAC,CAAC"}
+{"version":3,"file":"game-asset.d.ts","sourceRoot":"","sources":["../../../src/core/types/game-asset.ts"],"names":[],"mappings":"AAAA,MAAM,MAAM,gBAAgB,GAAG;IAAE,EAAE,EAAE,MAAM,CAAC;IAAC,IAAI,EAAE,MAAM,CAAC;IAAC,SAAS,EAAE,OAAO,GAAG,OAAO,GAAG,MAAM,GAAG,MAAM,CAAA;CAAC,CAAC"}

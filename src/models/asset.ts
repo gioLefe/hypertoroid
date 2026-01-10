@@ -10,7 +10,7 @@ export type SoundAsset = {
   tags: Tag[];
 };
 
-export type GenericFileAsset = {
-  source: any;
+export type GenericFileAsset<T = any> = {
+  source: T;
   tags: Tag[];
 };

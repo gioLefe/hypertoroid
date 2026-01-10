@@ -1,6 +1,6 @@
 import { DIContainer, InteractionManager } from "../core";
 import { createBoundingBox } from "../helpers";
-import { BaseObject, BoundingBox } from "../models";
+import { BaseObject } from "../models";
 
 const UIWINDOW_HITBOX_KEY = "uiwindow-dragging-hitbox";
 
@@ -12,7 +12,7 @@ type DraggableChild = BaseObject & Partial<WithInitialPosition>;
 
 export class DraggableObject extends BaseObject {
   interactionManager = DIContainer.getInstance().resolve<InteractionManager>(
-    InteractionManager.INTERACTION_MANAGER_ID
+    InteractionManager.INSTANCE_ID
   );
 
   isDragging = false;
@@ -23,11 +23,6 @@ export class DraggableObject extends BaseObject {
   draggingId: string = UIWINDOW_HITBOX_KEY;
 
   override elements: DraggableChild[] = [];
-
-  boundingBox: BoundingBox<number> = {
-    nw: { x: 0, y: 0 },
-    se: { x: 0, y: 0 },
-  };
 
   constructor(...args: any[]) {
     super(...(args as []));
@@ -73,24 +68,10 @@ export class DraggableObject extends BaseObject {
       el.x = initialX + deltaX;
       el.y = initialY + deltaY;
     }
-
-    // Update boundingBox in the event Handler
-    this.boundingBox = createBoundingBox(
-      this.x,
-      this.y,
-      this.width,
-      this.height
-    );
-    this.interactionManager.upsertHitbox(this.draggingId, {
-      getBoundingBox: this.getBBox,
-    });
   };
 
   _mouseDown = (ev: MouseEvent): void => {
-    if (
-      ev.buttons !== 1 ||
-      this.isDragging
-    ) {
+    if (ev.buttons !== 1 || this.isDragging) {
       return;
     }
     this.isDragging = true;
