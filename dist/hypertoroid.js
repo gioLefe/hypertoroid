@@ -137,7 +137,7 @@ var Settings = class {
     this.settings = this.settings.set(key, value);
   }
 };
-__publicField(Settings, "SETTINGS_DI", "settings");
+__publicField(Settings, "INSTANCE_ID", "settings");
 
 // src/models/game.ts
 var SCENE_MANAGER_DI = "SceneManager";
@@ -213,7 +213,7 @@ var Game = class {
       new AudioController()
     );
     this.diContainer.register(
-      Settings.SETTINGS_DI,
+      Settings.INSTANCE_ID,
       this.settingsManager
     );
   }
@@ -720,345 +720,6 @@ function throttle(func, limit) {
   };
 }
 
-// src/models/color.ts
-var RED = { r: 255, g: 0, b: 0, a: 255 };
-var GREEN = { r: 0, g: 255, b: 0, a: 255 };
-var BLUE = { r: 0, g: 0, b: 255, a: 255 };
-var YELLOW = { r: 255, g: 255, b: 0, a: 255 };
-function isSameColor(color, colorToCompare) {
-  return color.r === colorToCompare.r && color.g === colorToCompare.g && color.b === colorToCompare.b && color.a === colorToCompare.a;
-}
-function colorToString(color) {
-  return `rgba(${color.r},${color.g},${color.b},${color.a})`;
-}
-var pixelColorCache = { r: 0, g: 0, b: 0, a: 0 };
-function getCtxPixelColor(x, y, ctx) {
-  const data = ctx.getImageData(x, y, 1, 1).data;
-  pixelColorCache.r = data[0];
-  pixelColorCache.g = data[1];
-  pixelColorCache.b = data[2];
-  pixelColorCache.a = data[3];
-  return pixelColorCache;
-}
-function colorize(image, r, g, b) {
-  const imageSize = image.width;
-  const offscreen = new OffscreenCanvas(imageSize, imageSize);
-  const ctx = offscreen.getContext("2d");
-  ctx.drawImage(image, 0, 0);
-  const imageData = ctx.getImageData(0, 0, imageSize, imageSize);
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    imageData.data[i + 0] *= r;
-    imageData.data[i + 1] *= g;
-    imageData.data[i + 2] *= b;
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return offscreen;
-}
-
-// src/core/interaction-manager.ts
-var InteractionManager = class {
-  constructor(canvas) {
-    __publicField(this, "canvas");
-    __publicField(this, "hitboxEvents", /* @__PURE__ */ new Map());
-    __publicField(this, "hitboxArray", null);
-    __publicField(this, "hitBoxCanvas", new OffscreenCanvas(0, 0));
-    __publicField(this, "hitBoxOffscreenCtx", this.hitBoxCanvas.getContext("2d", { willReadFrequently: true }));
-    __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
-    __publicField(this, "keyboardFocusId", null);
-    __publicField(this, "mouseMoveTargetId", null);
-    __publicField(this, "mouseOutCallback", null);
-    __publicField(this, "mouseDownTargetId", null);
-    __publicField(this, "mouseUpCallback", null);
-    __publicField(this, "colorHeap", new ColorHeap());
-    __publicField(this, "listener", (htmlEv) => {
-      const evType = htmlEv.type;
-      if (evType.indexOf("key") === 0) {
-        if (this.keyboardFocusId) {
-          const focused = this.hitboxEvents.get(this.keyboardFocusId);
-          const callback2 = focused?.callbacks?.[evType];
-          if (callback2) {
-            callback2(htmlEv);
-          }
-          return;
-        }
-        const canvasHitBox = this.getCanvasEvent(evType);
-        if (canvasHitBox) {
-          canvasHitBox.callbacks?.[evType]?.(htmlEv);
-        }
-      }
-      const point = this.extractPoint(htmlEv);
-      if (!point) return;
-      let hitBoxEvent = this.getHitboxAt(point);
-      if (!hitBoxEvent) {
-        hitBoxEvent = this.getCanvasEvent(evType);
-      }
-      if (!hitBoxEvent) return;
-      const callback = hitBoxEvent.callbacks?.[evType];
-      if (callback) {
-        callback(htmlEv);
-      }
-      this.handleMouseButtonRelease(htmlEv, evType, hitBoxEvent);
-      this.handleMouseMove(htmlEv, evType, hitBoxEvent);
-    });
-    /** Handle mouse button release across different hitboxes.
-     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
-     * the original hitbox's mouseup callback is still invoked.
-     */
-    __publicField(this, "handleMouseButtonRelease", (htmlEv, evType, hitBoxEvent) => {
-      if (evType === "mousedown" && this.mouseUpCallback === null) {
-        this.mouseUpCallback = hitBoxEvent.callbacks?.["mouseup"] || null;
-        this.mouseDownTargetId = hitBoxEvent.id || null;
-      }
-      if (evType === "mouseup" && this.mouseUpCallback) {
-        if (this.mouseDownTargetId !== hitBoxEvent.id) {
-          this.mouseUpCallback(htmlEv);
-          this.mouseUpCallback = null;
-        }
-        this.mouseDownTargetId = null;
-      }
-    });
-    /** Handle mouse hover, dragging and mouseout across different hitboxes.
-     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
-     * the original hitbox's mouseup callback is still invoked.
-     */
-    __publicField(this, "handleMouseMove", (htmlEv, evType, hitBoxEvent) => {
-      if (evType !== "mousemove") {
-        return;
-      }
-      if (this.mouseDownTargetId && this.mouseDownTargetId !== hitBoxEvent.id) {
-        const originalHitbox = this.hitboxEvents.get(this.mouseDownTargetId);
-        const mouseMoveCallback = originalHitbox?.callbacks?.["mousemove"];
-        if (mouseMoveCallback && originalHitbox.data?.isDragging) {
-          mouseMoveCallback(htmlEv);
-          return;
-        }
-      }
-      if (evType === "mousemove" && this.mouseOutCallback === null) {
-        this.mouseOutCallback = hitBoxEvent.callbacks?.["mouseout"] || null;
-        this.mouseMoveTargetId = hitBoxEvent.id || null;
-      }
-      if (evType === "mousemove" && this.mouseOutCallback) {
-        if (this.mouseMoveTargetId !== hitBoxEvent.id) {
-          this.mouseOutCallback(htmlEv);
-          this.mouseMoveTargetId = null;
-          this.mouseOutCallback = null;
-        }
-      }
-    });
-    this.canvas = canvas;
-    this.updateCanvasSize(canvas.width, canvas.height);
-  }
-  registerEventListener(evType, options) {
-    this.canvas.addEventListener(evType, this.listener, options);
-  }
-  /**
-   * Query the highest-priority hitbox at a point.
-   * Returns undefined if no hitbox matches.
-   */
-  getHitboxAt(point) {
-    let winner;
-    let highestLayer = -Infinity;
-    for (const hb of this.hitboxEvents.values()) {
-      if (this.hitTest(hb, point)) {
-        const layer = hb.layer ?? 0;
-        if (layer > highestLayer) {
-          highestLayer = layer;
-          winner = hb;
-        }
-      }
-    }
-    return winner;
-  }
-  updateCanvasSize(width, height) {
-    this.hitBoxCanvas.width = width;
-    this.hitBoxCanvas.height = height;
-  }
-  registerKeyboardFocus(id) {
-    this.keyboardFocusId = id;
-  }
-  deregisterKeyboardFocus() {
-    this.keyboardFocusId = null;
-  }
-  // CRUD
-  upsertHitbox(id, options) {
-    const existing = this.hitboxEvents.get(id);
-    const nextcolor = options.color ?? existing?.color;
-    console.log(
-      `%c*upserting hitbox ${id}, color: rgba(${nextcolor?.r}, ${nextcolor?.g}, ${nextcolor?.b}, ${nextcolor?.a})`,
-      `background:rgb(1,1,0); color:rgba(${nextcolor?.r}, ${nextcolor?.g}, ${nextcolor?.b}, ${nextcolor?.a})`
-    );
-    this.hitboxEvents.set(id, {
-      id,
-      layer: options.layer ?? existing?.layer ?? 0,
-      getBoundingBox: options.getBoundingBox ?? existing?.getBoundingBox,
-      hitTest: options.hitTest ?? existing?.hitTest,
-      color: options.color ?? existing?.color,
-      image: options.image ?? existing?.image,
-      callbacks: options.callbacks ?? existing?.callbacks,
-      data: options.data ?? existing?.data
-    });
-    this.hitboxArray = null;
-  }
-  removeHitbox(id) {
-    this.hitboxEvents.delete(id);
-    this.hitboxArray = null;
-  }
-  hasHitBox(hbId) {
-    return this.hitboxEvents.has(hbId);
-  }
-  /**
-   * Renders hitboxes to the offscreen canvas, sorted by layer priority.
-   * This offscreen canvas is used by hitTest() for pixel-perfect collision detection.
-   * Higher layer values are rendered last (on top), ensuring they win priority queries.
-   */
-  render(ctx = this.hitBoxOffscreenCtx) {
-    if (!ctx) return;
-    ctx.clearRect(0, 0, this.hitBoxCanvas.width, this.hitBoxCanvas.height);
-    for (const hitboxEvent of this.getHitboxArray()) {
-      const bbox = hitboxEvent.getBoundingBox?.();
-      if (!bbox || !hitboxEvent.color) continue;
-      if (hitboxEvent.image) {
-        const colorized = this.colorizeCached(
-          hitboxEvent.image,
-          hitboxEvent.color
-        );
-        ctx.drawImage(colorized, bbox.nw.x, bbox.nw.y);
-        continue;
-      }
-      const colorString = colorToString(hitboxEvent.color);
-      ctx.fillStyle = colorString;
-      ctx.strokeStyle = colorString;
-      ctx.fillRect(
-        bbox.nw.x,
-        bbox.nw.y,
-        bbox.se.x - bbox.nw.x,
-        bbox.se.y - bbox.nw.y
-      );
-    }
-  }
-  clean(evTypes) {
-    for (const evType of evTypes) {
-      this.canvas.removeEventListener(evType, this.listener);
-    }
-    this.hitboxEvents.clear();
-    this.hitboxArray = null;
-    this.colorizedCache.clear();
-  }
-  extractPoint(ev) {
-    if ("offsetX" in ev && "offsetY" in ev) {
-      return { x: ev.offsetX, y: ev.offsetY };
-    }
-    return null;
-  }
-  hitTest(hitboxEvent, point) {
-    if (hitboxEvent.getBoundingBox) {
-      const bbox = hitboxEvent.getBoundingBox();
-      if (!bbox || !isPointInAlignedBBox(point, bbox)) {
-        return false;
-      }
-    }
-    if (hitboxEvent.hitTest) {
-      return hitboxEvent.hitTest(point, this.hitBoxOffscreenCtx);
-    }
-    if (hitboxEvent.color) {
-      const pixel = getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx);
-      return isSameColor(pixel, hitboxEvent.color);
-    }
-    return hitboxEvent.getBoundingBox !== void 0;
-  }
-  colorizeCached(image, color) {
-    const key = `${image.src}:${color.r},${color.g},${color.b},${color.a}`;
-    let cached = this.colorizedCache.get(key);
-    if (!cached) {
-      cached = colorize(image, color.r, color.g, color.b);
-      this.colorizedCache.set(key, cached);
-    }
-    return cached;
-  }
-  getHitboxArray() {
-    if (!this.hitboxArray) {
-      this.hitboxArray = Array.from(this.hitboxEvents.values()).sort(
-        (a, b) => (a.layer ?? 0) - (b.layer ?? 0)
-      );
-    }
-    return this.hitboxArray;
-  }
-  getCanvasEvent(evType) {
-    if (!this.hitboxArray) {
-      return void 0;
-    }
-    return this.hitboxArray?.find((hb) => {
-      return hb.getBoundingBox === void 0 && hb.hitTest === void 0 && hb.color === void 0 && hb.image === void 0 && hb.callbacks?.[evType];
-    });
-  }
-};
-__publicField(InteractionManager, "INSTANCE_ID", "InteractionManager");
-
-// src/core/scene-manager.ts
-var SceneManager = class {
-  constructor() {
-    __publicField(this, "currentScenes", []);
-    __publicField(this, "scenes", []);
-  }
-  addScene(scene) {
-    if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
-      console.warn("Scene with same id already exists, provide a new id");
-      return;
-    }
-    this.scenes.push(scene);
-  }
-  deleteScene(id) {
-    const i = this.getSceneIndex(id, this.currentScenes);
-    this.currentScenes[i].clean();
-    this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
-  }
-  getCurrentScenes() {
-    return this.currentScenes;
-  }
-  /**
-   * Changes the current scene to a new scene specified by the given ID.
-   *
-   * This function initializes the new scene, optionally initializes a loading scene, and updates
-   * the current scenes stack. It also handles cleaning up the previous scene state if specified.
-   *
-   * @param {string} id - The ID of the new scene to transition to.
-   * @param {boolean} [cleanPreviousState=true] - A flag indicating whether to clean up the previous scene state.
-   * @param {string} [loadingSceneId] - The ID of an optional loading scene to display while the new scene is initializing.
-   * @returns {Promise<void>} A promise that resolves when the scene transition is complete.
-   */
-  async changeScene(id, cleanPreviousState = true, loadingSceneId) {
-    const lastCurrentSceneId = this.currentScenes[this.currentScenes.length - 1]?.id;
-    const newScene = this.scenes[this.getSceneIndex(id, this.scenes)];
-    if (loadingSceneId !== void 0) {
-      const loadingSceneIndex = this.getSceneIndex(loadingSceneId, this.scenes);
-      let loadingScene = this.scenes[loadingSceneIndex];
-      const loadingSceneInitPromises = loadingScene.init();
-      if (loadingSceneInitPromises !== void 0) {
-        await loadingSceneInitPromises;
-      }
-      this.currentScenes.push(loadingScene);
-    }
-    const newSceneInitPromises = newScene.init();
-    if (newSceneInitPromises !== void 0) {
-      await newSceneInitPromises;
-    }
-    if (cleanPreviousState && lastCurrentSceneId !== void 0) {
-      this.deleteScene(lastCurrentSceneId);
-    }
-    if (loadingSceneId !== void 0) {
-      this.deleteScene(loadingSceneId);
-    }
-    this.currentScenes.push(newScene);
-  }
-  getSceneIndex(id, scenes) {
-    const loadingSceneIndex = scenes.findIndex((s) => s.id === id);
-    if (loadingSceneIndex === -1) {
-      throw new Error(`cannot find scene with id ${id}`);
-    }
-    return loadingSceneIndex;
-  }
-};
-
 // src/models/base-object.ts
 var BaseObject = class {
   constructor() {
@@ -1124,6 +785,41 @@ var BaseObject = class {
 };
 var BaseObjectClass = class extends BaseObject {
 };
+
+// src/models/color.ts
+var RED = { r: 255, g: 0, b: 0, a: 255 };
+var GREEN = { r: 0, g: 255, b: 0, a: 255 };
+var BLUE = { r: 0, g: 0, b: 255, a: 255 };
+var YELLOW = { r: 255, g: 255, b: 0, a: 255 };
+function isSameColor(color, colorToCompare) {
+  return color.r === colorToCompare.r && color.g === colorToCompare.g && color.b === colorToCompare.b && color.a === colorToCompare.a;
+}
+function colorToString(color) {
+  return `rgba(${color.r},${color.g},${color.b},${color.a})`;
+}
+var pixelColorCache = { r: 0, g: 0, b: 0, a: 0 };
+function getCtxPixelColor(x, y, ctx) {
+  const data = ctx.getImageData(x, y, 1, 1).data;
+  pixelColorCache.r = data[0];
+  pixelColorCache.g = data[1];
+  pixelColorCache.b = data[2];
+  pixelColorCache.a = data[3];
+  return pixelColorCache;
+}
+function colorize(image, r, g, b) {
+  const imageSize = image.width;
+  const offscreen = new OffscreenCanvas(imageSize, imageSize);
+  const ctx = offscreen.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, imageSize, imageSize);
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    imageData.data[i + 0] *= r;
+    imageData.data[i + 1] *= g;
+    imageData.data[i + 2] *= b;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return offscreen;
+}
 
 // src/models/game-object.ts
 var GameObject = class {
@@ -1299,11 +995,508 @@ function pivotComparator(p1, p2) {
   return p1.position.x === p2.position.x && p1.position.y === p2.position.y && p1.direction === p2.direction;
 }
 
+// src/core/ecs/ecs-component.ts
+var EcsComponent = class {
+};
+var ComponentContainer = class {
+  constructor() {
+    __publicField(this, "map", /* @__PURE__ */ new Map());
+  }
+  add(component) {
+    this.map.set(component.constructor, component);
+  }
+  get(componentClass) {
+    return this.map.get(componentClass);
+  }
+  has(componentClass) {
+    return this.map.has(componentClass);
+  }
+  hasAll(componentClasses) {
+    for (let cls of componentClasses) {
+      if (!this.map.has(cls)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  delete(componentClass) {
+    this.map.delete(componentClass);
+  }
+};
+
+// src/core/ecs/ecs.ts
+var ECS = class {
+  constructor() {
+    // Main state
+    __publicField(this, "entities", /* @__PURE__ */ new Map());
+    __publicField(this, "systems", /* @__PURE__ */ new Map());
+    // Sorted array of systems by priority (ascending) for deterministic update order
+    __publicField(this, "systemOrder", []);
+    // Bookkeeping for entities.
+    __publicField(this, "nextEntityID", 0);
+    __publicField(this, "entitiesToDestroy", new Array());
+  }
+  // API: Entities
+  addEntity() {
+    let entity = this.nextEntityID;
+    this.nextEntityID++;
+    this.entities.set(entity, new ComponentContainer());
+    return entity;
+  }
+  /**
+   * Marks `entity` for removal. The actual removal happens at the end
+   * of the next `update()`. This way we avoid subtle bugs where an
+   * Entity is removed mid-`update()`, with some Systems seeing it and
+   * others not.
+   */
+  removeEntity(entity) {
+    this.entitiesToDestroy.push(entity);
+  }
+  // API: Components
+  addComponent(entity, component) {
+    this.entities.get(entity)?.add(component);
+    this.checkE(entity);
+  }
+  getComponents(entity) {
+    return this.entities.get(entity);
+  }
+  /**
+   * Get all entities in the ECS.
+   * Useful for systems that need to query entities not matching their componentsRequired.
+   */
+  getAllEntities() {
+    return this.entities;
+  }
+  removeComponent(entity, componentClass) {
+    this.entities.get(entity)?.delete(componentClass);
+    this.checkE(entity);
+  }
+  // API: Systems
+  addSystem(system) {
+    if (system.componentsRequired.size == 0) {
+      console.warn("System not added: empty Components list.", system);
+      return;
+    }
+    system.ecs = this;
+    this.systems.set(system, /* @__PURE__ */ new Set());
+    for (let entity of this.entities.keys()) {
+      this.checkES(entity, system);
+    }
+    this.systemOrder.push(system);
+    this.systemOrder.sort((a, b) => a.priority - b.priority);
+  }
+  /**
+   * Note: I never actually had a removeSystem() method for the entire
+   * time I was programming the game Fallgate (2 years!). I just added
+   * one here for a specific testing reason (see the next post).
+   * Because it's just for demo purposes, this requires an actual
+   * instance of a System to remove (which would be clunky as a real
+   * API).
+   */
+  removeSystem(system) {
+    this.systems.delete(system);
+    const index = this.systemOrder.indexOf(system);
+    if (index !== -1) {
+      this.systemOrder.splice(index, 1);
+    }
+  }
+  /**
+   * This is ordinarily called once per tick (e.g., every frame). It
+   * updates all Systems in priority order, then destroys any Entities
+   * that were marked for removal.
+   */
+  update() {
+    for (const system of this.systemOrder) {
+      const entities = this.systems.get(system);
+      if (entities !== void 0) {
+        system.update(entities);
+      }
+    }
+    while (this.entitiesToDestroy.length > 0) {
+      const entity = this.entitiesToDestroy.pop();
+      if (entity !== void 0) {
+        this.destroyEntity(entity);
+      }
+    }
+  }
+  // API: Query helpers
+  /**
+   * Find all entities that have a specific component type.
+   *
+   * @param componentClass - The component class to search for
+   * @returns Array of entities that have the specified component
+   */
+  findEntitiesByComponent(componentClass) {
+    const results = [];
+    for (const [entity, components] of this.entities) {
+      if (components.has(componentClass)) {
+        results.push(entity);
+      }
+    }
+    return results;
+  }
+  /**
+   * Find the first entity that has a specific component matching a predicate.
+   *
+   * @param componentClass - The component class to search for
+   * @param predicate - Function to test each component
+   * @returns The first matching entity, or undefined if none found
+   */
+  findEntityByComponentValue(componentClass, predicate) {
+    for (const [entity, components] of this.entities) {
+      if (components.has(componentClass)) {
+        const component = components.get(componentClass);
+        if (predicate(component)) {
+          return entity;
+        }
+      }
+    }
+    return void 0;
+  }
+  /**
+   * Find all entities that have a specific component matching a predicate.
+   *
+   * @param componentClass - The component class to search for
+   * @param predicate - Function to test each component
+   * @returns Array of matching entities
+   */
+  findEntitiesByComponentValue(componentClass, predicate) {
+    const results = [];
+    for (const [entity, components] of this.entities) {
+      if (components.has(componentClass)) {
+        const component = components.get(componentClass);
+        if (predicate(component)) {
+          results.push(entity);
+        }
+      }
+    }
+    return results;
+  }
+  // Private methods for doing internal state checks and mutations.
+  destroyEntity(entity) {
+    this.entities.delete(entity);
+    for (let entities of this.systems.values()) {
+      entities.delete(entity);
+    }
+  }
+  checkE(entity) {
+    for (let system of this.systems.keys()) {
+      this.checkES(entity, system);
+    }
+  }
+  checkES(entity, system) {
+    let have = this.entities.get(entity);
+    let need = system.componentsRequired;
+    if (have?.hasAll(need)) {
+      this.systems.get(system)?.add(entity);
+    } else {
+      this.systems.get(system)?.delete(entity);
+    }
+  }
+};
+__publicField(ECS, "INSTANCE_ID", "ECS_MAIN_INSTANCE");
+
+// src/core/ecs/ecs-system.ts
+var EcsSystem = class {
+  constructor() {
+    /**
+     * Priority determines the order in which systems are updated.
+     * Lower values run first. Default is 0.
+     *
+     * Recommended ranges:
+     * - 0-49: Pre-processing systems (e.g., FloorPrerenderSystem)
+     * - 50-99: Logic systems (e.g., ZOrderSystem)
+     * - 100+: Rendering systems (e.g., RenderSystem)
+     */
+    __publicField(this, "priority", 0);
+    /**
+     * The ECS is given to all Systems. Systems contain most of the game
+     * code, so they need to be able to create, mutate, and destroy
+     * Entities and Components.
+     */
+    __publicField(this, "ecs");
+  }
+};
+
+// src/core/ecs/components/hitbox-component.ts
+var HitboxComponent = class extends EcsComponent {
+  constructor(id, layer, callbacks, data, getBoundingBox, hitTest, color, image) {
+    super();
+    this.id = id;
+    this.layer = layer;
+    this.callbacks = callbacks;
+    this.data = data;
+    this.getBoundingBox = getBoundingBox;
+    this.hitTest = hitTest;
+    this.color = color;
+    this.image = image;
+  }
+};
+
+// src/core/ecs/components/keyboard-focus-tag-component.ts
+var KeyboardFocusTagComponent = class extends EcsComponent {
+};
+
+// src/core/ecs/components/canvas-hitbox-tag-component.ts
+var CanvasHitboxTagComponent = class extends EcsComponent {
+};
+
+// src/core/ecs/components/mouse-down-tag-component.ts
+var MouseDownTagComponent = class extends EcsComponent {
+};
+
+// src/core/interaction-manager.ts
+var InteractionManager = class {
+  constructor(canvas, ecs) {
+    this.ecs = ecs;
+    __publicField(this, "canvas");
+    __publicField(this, "hitBoxCanvas", new OffscreenCanvas(0, 0));
+    __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
+    __publicField(this, "mouseMoveTargetId", null);
+    __publicField(this, "mouseOutCallback", null);
+    __publicField(this, "mouseDownTargetId", null);
+    __publicField(this, "mouseUpCallback", null);
+    __publicField(this, "_point", { x: 0, y: 0 });
+    __publicField(this, "colorHeap", new ColorHeap());
+    __publicField(this, "hitBoxOffscreenCtx", this.hitBoxCanvas.getContext("2d", { willReadFrequently: true }));
+    __publicField(this, "listener", (htmlEv) => {
+      const evType = htmlEv.type;
+      if (evType.indexOf("key") === 0) {
+        const entity = this.ecs.findEntitiesByComponent(
+          KeyboardFocusTagComponent
+        );
+        console.log(`entity:`, entity[0]);
+        if (entity.length) {
+          const components = this.ecs.getComponents(entity[0]);
+          const focusedHitbox = components?.get(HitboxComponent);
+          const callback2 = focusedHitbox?.callbacks?.[evType];
+          if (callback2) {
+            callback2(htmlEv);
+          }
+          return;
+        }
+        const canvasHitBox = this.getCanvasHitbox(evType);
+        if (canvasHitBox) {
+          canvasHitBox.callbacks?.[evType]?.(htmlEv);
+        }
+      }
+      this.extractPoint(htmlEv, this._point);
+      if (!this._point) return;
+      let hitBoxComponent = this.getHitboxAt(this._point);
+      if (!hitBoxComponent) {
+        hitBoxComponent = this.getCanvasHitbox(evType);
+      }
+      if (!hitBoxComponent) return;
+      const callback = hitBoxComponent.callbacks?.[evType];
+      if (callback) {
+        callback(htmlEv);
+      }
+      this.handleMouseButtonRelease(htmlEv, evType, hitBoxComponent);
+      this.handleMouseMove(htmlEv, evType, hitBoxComponent);
+    });
+    /** Handle mouse button release across different hitboxes.
+     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
+     * the original hitbox's mouseup callback is still invoked.
+     */
+    __publicField(this, "handleMouseButtonRelease", (htmlEv, evType, hitboxComponent) => {
+      if (evType === "mousedown" && this.mouseUpCallback === null) {
+        this.mouseUpCallback = hitboxComponent.callbacks?.["mouseup"] || null;
+        this.mouseDownTargetId = hitboxComponent.id || null;
+      }
+      if (evType === "mouseup" && this.mouseUpCallback) {
+        if (this.mouseDownTargetId !== hitboxComponent.id) {
+          this.mouseUpCallback(htmlEv);
+          this.mouseUpCallback = null;
+        }
+        this.mouseDownTargetId = null;
+      }
+    });
+    /** Handle mouse hover, dragging and mouseout across different hitboxes.
+     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
+     * the original hitbox's mouseup callback is still invoked.
+     */
+    __publicField(this, "handleMouseMove", (htmlEv, evType, hitboxComponent) => {
+      if (evType !== "mousemove") {
+        return;
+      }
+      if (this.mouseDownTargetId && this.mouseDownTargetId !== hitboxComponent.id) {
+        const entity = this.ecs.findEntitiesByComponent(MouseDownTagComponent);
+        const hitbox = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
+        const originalHitbox = hitbox;
+        const mouseMoveCallback = originalHitbox?.callbacks?.["mousemove"];
+        if (mouseMoveCallback && originalHitbox.data?.isDragging) {
+          mouseMoveCallback(htmlEv);
+          return;
+        }
+      }
+      if (evType === "mousemove" && this.mouseOutCallback === null) {
+        this.mouseOutCallback = hitboxComponent.callbacks?.["mouseout"] || null;
+        this.mouseMoveTargetId = hitboxComponent.id || null;
+      }
+      if (evType === "mousemove" && this.mouseOutCallback) {
+        if (this.mouseMoveTargetId !== hitboxComponent.id) {
+          this.mouseOutCallback(htmlEv);
+          this.mouseMoveTargetId = null;
+          this.mouseOutCallback = null;
+        }
+      }
+    });
+    this.canvas = canvas;
+    this.updateCanvasSize(canvas.width, canvas.height);
+  }
+  registerEventListener(evType, options) {
+    this.canvas.addEventListener(evType, this.listener, options);
+  }
+  registerKeyboardFocus(entity) {
+    const entities = this.ecs.findEntitiesByComponent(
+      KeyboardFocusTagComponent
+    );
+    if (entities.length) {
+      this.ecs.removeComponent(entities[0], KeyboardFocusTagComponent);
+    }
+    this.ecs.addComponent(entity, new KeyboardFocusTagComponent());
+  }
+  updateCanvasSize(width, height) {
+    this.hitBoxCanvas.width = width;
+    this.hitBoxCanvas.height = height;
+  }
+  clean(evTypes) {
+    for (const evType of evTypes) {
+      this.canvas.removeEventListener(evType, this.listener);
+    }
+    this.colorizedCache.clear();
+  }
+  extractPoint(ev, out) {
+    const point = out ?? { x: 0, y: 0 };
+    if ("offsetX" in ev && "offsetY" in ev) {
+      point.x = ev.offsetX;
+      point.y = ev.offsetY;
+    }
+    return point;
+  }
+  /**
+   * Query the highest-priority hitbox at a point.
+   * Returns undefined if no hitbox matches.
+   */
+  getHitboxAt(point) {
+    let winner;
+    let highestLayer = -Infinity;
+    const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
+    for (let i = 0; i < entities.length; i++) {
+      const hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
+      if (hb && this.hitTest(hb, point)) {
+        const layer = hb.layer ?? 0;
+        if (layer > highestLayer) {
+          highestLayer = layer;
+          winner = hb;
+        }
+      }
+    }
+    return winner;
+  }
+  hitTest(hitboxComponent, point) {
+    if (hitboxComponent.getBoundingBox) {
+      const bbox = hitboxComponent.getBoundingBox();
+      if (!bbox || !isPointInAlignedBBox(point, bbox)) {
+        return false;
+      }
+    }
+    if (hitboxComponent.hitTest) {
+      console.log(`hittest`);
+      return hitboxComponent.hitTest(point, this.hitBoxOffscreenCtx);
+    }
+    if (hitboxComponent.color) {
+      console.log(`color`);
+      const pixel = getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx);
+      return isSameColor(pixel, hitboxComponent.color);
+    }
+    return hitboxComponent.getBoundingBox !== void 0;
+  }
+  getCanvasHitbox(_evType) {
+    const entity = this.ecs.findEntitiesByComponent(CanvasHitboxTagComponent);
+    if (!entity) {
+      console.error("cannot find Canvas Hitbox tag componet");
+      return;
+    }
+    const hb = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
+    if (!hb) {
+      return void 0;
+    }
+    return hb;
+  }
+};
+__publicField(InteractionManager, "INSTANCE_ID", "InteractionManager");
+
+// src/core/scene-manager.ts
+var SceneManager = class {
+  constructor() {
+    __publicField(this, "currentScenes", []);
+    __publicField(this, "scenes", []);
+  }
+  addScene(scene) {
+    if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
+      console.warn("Scene with same id already exists, provide a new id");
+      return;
+    }
+    this.scenes.push(scene);
+  }
+  deleteScene(id) {
+    const i = this.getSceneIndex(id, this.currentScenes);
+    this.currentScenes[i].clean();
+    this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
+  }
+  getCurrentScenes() {
+    return this.currentScenes;
+  }
+  /**
+   * Changes the current scene to a new scene specified by the given ID.
+   *
+   * This function initializes the new scene, optionally initializes a loading scene, and updates
+   * the current scenes stack. It also handles cleaning up the previous scene state if specified.
+   *
+   * @param {string} id - The ID of the new scene to transition to.
+   * @param {boolean} [cleanPreviousState=true] - A flag indicating whether to clean up the previous scene state.
+   * @param {string} [loadingSceneId] - The ID of an optional loading scene to display while the new scene is initializing.
+   * @returns {Promise<void>} A promise that resolves when the scene transition is complete.
+   */
+  async changeScene(id, cleanPreviousState = true, loadingSceneId) {
+    const lastCurrentSceneId = this.currentScenes[this.currentScenes.length - 1]?.id;
+    const newScene = this.scenes[this.getSceneIndex(id, this.scenes)];
+    if (loadingSceneId !== void 0) {
+      const loadingSceneIndex = this.getSceneIndex(loadingSceneId, this.scenes);
+      let loadingScene = this.scenes[loadingSceneIndex];
+      const loadingSceneInitPromises = loadingScene.init();
+      if (loadingSceneInitPromises !== void 0) {
+        await loadingSceneInitPromises;
+      }
+      this.currentScenes.push(loadingScene);
+    }
+    const newSceneInitPromises = newScene.init();
+    if (newSceneInitPromises !== void 0) {
+      await newSceneInitPromises;
+    }
+    if (cleanPreviousState && lastCurrentSceneId !== void 0) {
+      this.deleteScene(lastCurrentSceneId);
+    }
+    if (loadingSceneId !== void 0) {
+      this.deleteScene(loadingSceneId);
+    }
+    this.currentScenes.push(newScene);
+  }
+  getSceneIndex(id, scenes) {
+    const loadingSceneIndex = scenes.findIndex((s) => s.id === id);
+    if (loadingSceneIndex === -1) {
+      throw new Error(`cannot find scene with id ${id}`);
+    }
+    return loadingSceneIndex;
+  }
+};
+
 // src/mixins/with-dragging.ts
-var UIWINDOW_HITBOX_KEY = "uiwindow-dragging-hitbox";
 var DraggableObject = class extends BaseObject {
-  constructor(...args) {
+  constructor(ecs, ...args) {
     super(...args);
+    this.ecs = ecs;
     __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
       InteractionManager.INSTANCE_ID
     ));
@@ -1312,25 +1505,34 @@ var DraggableObject = class extends BaseObject {
     __publicField(this, "dragStartY", 0);
     __publicField(this, "initialX", 0);
     __publicField(this, "initialY", 0);
-    __publicField(this, "draggingId", UIWINDOW_HITBOX_KEY);
+    __publicField(this, "entity", null);
     __publicField(this, "elements", []);
-    __publicField(this, "registerDragging", (id) => {
+    __publicField(this, "_hb");
+    __publicField(this, "registerDragging", () => {
       if (this.canvas === null) {
         return;
       }
-      this.draggingId = id ?? UIWINDOW_HITBOX_KEY;
-      this.interactionManager.upsertHitbox(this.draggingId, {
-        getBoundingBox: this.getBBox,
-        callbacks: {
-          mousemove: this._mouseHover,
-          mousedown: this._mouseDown,
-          mouseup: this._mouseUp
-        },
-        color: this.interactionManager.colorHeap.getNext()
-      });
+      this.entity = this.ecs.addEntity();
+      this.ecs.addComponent(
+        this.entity,
+        new HitboxComponent(
+          this.entity,
+          100,
+          {
+            mousemove: this._mouseHover,
+            mousedown: this._mouseDown,
+            mouseup: this._mouseUp
+          },
+          void 0,
+          this.getBBox,
+          void 0,
+          this.interactionManager.colorHeap.getNext(),
+          void 0
+        )
+      );
     });
     __publicField(this, "deregister", () => {
-      this.interactionManager.removeHitbox(this.draggingId);
+      if (this.entity) this.ecs.removeComponent(this.entity, HitboxComponent);
     });
     __publicField(this, "getBBox", () => {
       return createBoundingBox(this.x, this.y, this.width, this.height);
@@ -1352,7 +1554,7 @@ var DraggableObject = class extends BaseObject {
       }
     });
     __publicField(this, "_mouseDown", (ev) => {
-      if (ev.buttons !== 1 || this.isDragging) {
+      if (ev.buttons !== 1 || this.isDragging || !this.entity) {
         return;
       }
       this.isDragging = true;
@@ -1364,15 +1566,16 @@ var DraggableObject = class extends BaseObject {
         el.initialX = el.x;
         el.initialY = el.y;
       });
-      this.interactionManager.upsertHitbox(this.draggingId, {
-        data: { isDragging: true }
-      });
+      this._hb = this.ecs.getComponents(this.entity)?.get(HitboxComponent);
+      if (!this._hb) return;
+      this._hb.data = { ...this._hb.data, isDragging: true };
     });
     __publicField(this, "_mouseUp", (_ev) => {
       this.isDragging = false;
-      this.interactionManager.upsertHitbox(this.draggingId, {
-        data: { isDragging: false }
-      });
+      if (!this.entity) return;
+      this._hb = this.ecs.getComponents(this.entity)?.get(HitboxComponent);
+      if (!this._hb) return;
+      this._hb.data = { ...this._hb.data, isDragging: false };
     });
   }
 };
@@ -1427,8 +1630,9 @@ var UIBUTTON_HOVER_COLOR = { r: 150, g: 150, b: 150, a: 255 };
 var UIBUTTON_ACTIVE_COLOR = { r: 200, g: 200, b: 200, a: 255 };
 var UIBUTTON_TEXT_COLOR = { r: 255, g: 255, b: 255, a: 255 };
 var UIButton = class extends BaseObject {
-  constructor(canvas, ctx, hitBoxId) {
+  constructor(canvas, ctx, ecs) {
     super();
+    this.ecs = ecs;
     __publicField(this, "interactionManager", DIContainer.getInstance().resolve(
       InteractionManager.INSTANCE_ID
     ));
@@ -1440,6 +1644,7 @@ var UIButton = class extends BaseObject {
     __publicField(this, "isHovering", false);
     __publicField(this, "layer", 50);
     __publicField(this, "hitBoxId", UIBUTTON_HITBOX_KEY);
+    __publicField(this, "entity");
     __publicField(this, "getBBox", () => {
       return createBoundingBox(this.x, this.y, this.width, this.height);
     });
@@ -1454,27 +1659,34 @@ var UIButton = class extends BaseObject {
     });
     this.ctx = ctx;
     this.canvas = canvas;
-    this.hitBoxId = hitBoxId;
+    this.entity = this.ecs.addEntity();
   }
   async init(layer = 50) {
     await super.init();
+    if (!this.entity) return;
     this.layer = layer;
-    this.interactionManager.upsertHitbox(this.hitBoxId, {
-      callbacks: {
-        mousemove: this.mouseMove,
-        mouseout: this.mouseOut
-      },
-      color: this.interactionManager.colorHeap.getNext(),
-      layer,
-      getBoundingBox: this.getBBox
-    });
+    this.ecs.addComponent(
+      this.entity,
+      new HitboxComponent(
+        this.entity,
+        layer,
+        {
+          mousemove: this.mouseMove,
+          mouseout: this.mouseOut
+        },
+        void 0,
+        this.getBBox,
+        void 0,
+        this.interactionManager.colorHeap.getNext()
+      )
+    );
   }
   update(_deltaTime) {
     super.update(_deltaTime);
   }
   clean(..._args) {
     super.clean();
-    this.interactionManager.removeHitbox(UIBUTTON_HITBOX_KEY);
+    if (this.entity) this.ecs.removeComponent(this.entity, HitboxComponent);
   }
   render() {
     this.ctx.fillStyle = this.isHovering ? colorToString(this.hoverColor) : colorToString(this.backgroundColor);
@@ -1655,8 +1867,8 @@ var UIPanel = class extends GameObject {
 // src/ui/controls/window.ts
 var HEADER_HEIGHT = 30;
 var UIWindow = class extends DraggableObject {
-  constructor(canvas, ctx) {
-    super();
+  constructor(canvas, ctx, ecs) {
+    super(ecs);
     __publicField(this, "ctx");
     __publicField(this, "backgroundcolor", "rgba(50, 50, 50, 0.8)");
     __publicField(this, "borderColor", "black");
@@ -1670,8 +1882,8 @@ var UIWindow = class extends DraggableObject {
     this.width = 300;
     this.height = 200;
   }
-  async init(_deltaTime, id, ..._args) {
-    this.registerDragging(id);
+  async init(_deltaTime, ..._args) {
+    this.registerDragging();
   }
   update(_deltaTime) {
   }
@@ -1737,15 +1949,22 @@ export {
   BaseObjectClass,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  CanvasHitboxTagComponent,
   ColorHeap,
+  ComponentContainer,
   DIContainer,
   DraggableObject,
+  ECS,
+  EcsComponent,
+  EcsSystem,
   GAME_LOOP_TIME,
   GREEN,
   Game,
   GameObject,
   HEADER_HEIGHT,
+  HitboxComponent,
   InteractionManager,
+  KeyboardFocusTagComponent,
   LinkedList,
   LinkedListNode,
   QuadTree,

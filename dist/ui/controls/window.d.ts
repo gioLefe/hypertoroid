@@ -1,3 +1,4 @@
+import { ECS } from "../../core";
 import { DraggableObject } from "../../mixins";
 export declare const HEADER_HEIGHT = 30;
 export declare class UIWindow extends DraggableObject {
@@ -7,8 +8,8 @@ export declare class UIWindow extends DraggableObject {
     protected borderWidth: number;
     protected textColor: string;
     protected title: string;
-    constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D);
-    init(_deltaTime: number, id: string, ..._args: []): Promise<any>;
+    constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, ecs: ECS);
+    init(_deltaTime: number, ..._args: []): Promise<any>;
     update(_deltaTime: number): any;
     render(): void;
     clean(): void;

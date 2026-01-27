@@ -1,4 +1,10 @@
-import { DIContainer, InteractionManager } from "../../core";
+import {
+  DIContainer,
+  ECS,
+  EcsEntity,
+  HitboxComponent,
+  InteractionManager,
+} from "../../core";
 import { createBoundingBox } from "../../helpers";
 import { BaseObject, Color, colorToString } from "../../models";
 
@@ -12,7 +18,7 @@ const UIBUTTON_TEXT_COLOR: Color = { r: 255, g: 255, b: 255, a: 255 };
 export class UIButton extends BaseObject {
   protected interactionManager =
     DIContainer.getInstance().resolve<InteractionManager>(
-      InteractionManager.INSTANCE_ID
+      InteractionManager.INSTANCE_ID,
     );
   protected ctx: CanvasRenderingContext2D;
   backgroundColor: Color = UIBUTTON_BACKGROUND_COLOR;
@@ -23,30 +29,39 @@ export class UIButton extends BaseObject {
   isHovering = false;
   layer: number = 50;
   hitBoxId: string = UIBUTTON_HITBOX_KEY;
+  entity: EcsEntity | undefined;
 
   constructor(
     canvas: HTMLCanvasElement,
     ctx: CanvasRenderingContext2D,
-    hitBoxId: string
+    private ecs: ECS,
   ) {
     super();
     this.ctx = ctx;
     this.canvas = canvas;
-    this.hitBoxId = hitBoxId;
+    this.entity = this.ecs.addEntity();
   }
 
   override async init(layer: number = 50): Promise<void> {
     await super.init();
+    if (!this.entity) return;
+
     this.layer = layer;
-    this.interactionManager.upsertHitbox(this.hitBoxId, {
-      callbacks: {
-        mousemove: this.mouseMove,
-        mouseout: this.mouseOut,
-      },
-      color: this.interactionManager.colorHeap.getNext(),
-      layer,
-      getBoundingBox: this.getBBox,
-    });
+    this.ecs.addComponent(
+      this.entity,
+      new HitboxComponent(
+        this.entity,
+        layer,
+        {
+          mousemove: this.mouseMove,
+          mouseout: this.mouseOut,
+        },
+        undefined,
+        this.getBBox,
+        undefined,
+        this.interactionManager.colorHeap.getNext(),
+      ),
+    );
   }
 
   override update(_deltaTime: number): void {
@@ -55,7 +70,7 @@ export class UIButton extends BaseObject {
 
   override clean(..._args: any): void {
     super.clean();
-    this.interactionManager.removeHitbox(UIBUTTON_HITBOX_KEY);
+    if (this.entity) this.ecs.removeComponent(this.entity, HitboxComponent);
   }
 
   override render(): void {

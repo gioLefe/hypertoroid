@@ -1,6 +1,7 @@
-import { InteractionManager } from "../../core";
+import { ECS, EcsEntity, InteractionManager } from "../../core";
 import { BaseObject, Color } from "../../models";
 export declare class UIButton extends BaseObject {
+    private ecs;
     protected interactionManager: InteractionManager;
     protected ctx: CanvasRenderingContext2D;
     backgroundColor: Color;
@@ -10,7 +11,8 @@ export declare class UIButton extends BaseObject {
     isHovering: boolean;
     layer: number;
     hitBoxId: string;
-    constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, hitBoxId: string);
+    entity: EcsEntity | undefined;
+    constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, ecs: ECS);
     init(layer?: number): Promise<void>;
     update(_deltaTime: number): void;
     clean(..._args: any): void;

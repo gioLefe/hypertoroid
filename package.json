@@ -1,6 +1,6 @@
 {
   "name": "hypertoroid",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "./dist/hypertoroid.js",
   "types": "./dist/hypertoroid.d.ts",
   "type": "module",
@@ -30,13 +30,14 @@
   "homepage": "https://github.com/gioLefe/hypertoroid#readme",
   "description": "",
   "dependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
-    "eslint": "^9.17.0",
-    "prettier": "^3.5.3",
-    "typescript-eslint": "^8.19.1",
-    "esbuild": "^0.25.5"
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.52.0",
+    "esbuild": "^0.27.2",
+    "vitest": "^4.0.18"
   }
 }

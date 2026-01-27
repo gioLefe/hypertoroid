@@ -3,8 +3,8 @@ export const CANVAS_HEIGHT = "canvasH";
 export const GAME_LOOP_TIME = "gameLoopTime";
 
 export class Settings {
-  static SETTINGS_DI = "settings";
-  
+  static INSTANCE_ID = "settings";
+
   private settings = new Map<string, unknown>();
 
   get<T extends unknown>(key: string): T | undefined {

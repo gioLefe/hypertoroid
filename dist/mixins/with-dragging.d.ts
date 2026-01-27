@@ -1,4 +1,4 @@
-import { InteractionManager } from "../core";
+import { ECS, EcsEntity, InteractionManager } from "../core";
 import { BaseObject } from "../models";
 export type WithInitialPosition = {
     initialX: number;
@@ -6,16 +6,18 @@ export type WithInitialPosition = {
 };
 type DraggableChild = BaseObject & Partial<WithInitialPosition>;
 export declare class DraggableObject extends BaseObject {
+    ecs: ECS;
     interactionManager: InteractionManager;
     isDragging: boolean;
     dragStartX: number;
     dragStartY: number;
     initialX: number;
     initialY: number;
-    draggingId: string;
+    entity: EcsEntity | null;
     elements: DraggableChild[];
-    constructor(...args: any[]);
-    registerDragging: (id?: string) => void;
+    private _hb;
+    constructor(ecs: ECS, ...args: any[]);
+    registerDragging: () => void;
     deregister: () => void;
     getBBox: () => import("../models").BoundingBox<number>;
     _mouseHover: (ev: MouseEvent) => void;

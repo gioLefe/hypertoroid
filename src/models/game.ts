@@ -39,7 +39,7 @@ export abstract class Game implements GameCycle {
     canvas: HTMLCanvasElement,
     canvasWidth: number,
     canvasHeight: number,
-    fps: number = 30
+    fps: number = 30,
   ) {
     if (canvas === null) {
       console.error(`%c *** Error, Canvas cannot be null`);
@@ -75,19 +75,19 @@ export abstract class Game implements GameCycle {
     this.settingsManager = new Settings();
     this.diContainer.register<SceneHandler>(
       SCENE_MANAGER_DI,
-      this.sceneManager
+      this.sceneManager,
     );
     this.diContainer.register<AssetsHandler>(
       ASSETS_MANAGER_DI,
-      this.assetsManager
+      this.assetsManager,
     );
     this.diContainer.register<AudioController>(
       AudioController.AUDIO_CONTROLLER_DI,
-      new AudioController()
+      new AudioController(),
     );
     this.diContainer.register<Settings>(
-      Settings.SETTINGS_DI,
-      this.settingsManager
+      Settings.INSTANCE_ID,
+      this.settingsManager,
     );
   }
 

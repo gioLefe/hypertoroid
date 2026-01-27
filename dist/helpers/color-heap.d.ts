@@ -1,7 +1,10 @@
-import { HitBoxColor } from "../core";
+import { Color } from "../models";
+export type HitboxColor = Color & {
+    a: 255;
+};
 export declare class ColorHeap {
     private freedColors;
     private nextColor;
-    getNext(): HitBoxColor;
+    getNext(): HitboxColor;
 }
 //# sourceMappingURL=color-heap.d.ts.map

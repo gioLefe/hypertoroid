@@ -1,8 +1,12 @@
-import { DIContainer, InteractionManager } from "../core";
+import {
+  DIContainer,
+  ECS,
+  EcsEntity,
+  HitboxComponent,
+  InteractionManager,
+} from "../core";
 import { createBoundingBox } from "../helpers";
 import { BaseObject } from "../models";
-
-const UIWINDOW_HITBOX_KEY = "uiwindow-dragging-hitbox";
 
 export type WithInitialPosition = {
   initialX: number;
@@ -12,7 +16,7 @@ type DraggableChild = BaseObject & Partial<WithInitialPosition>;
 
 export class DraggableObject extends BaseObject {
   interactionManager = DIContainer.getInstance().resolve<InteractionManager>(
-    InteractionManager.INSTANCE_ID
+    InteractionManager.INSTANCE_ID,
   );
 
   isDragging = false;
@@ -20,32 +24,46 @@ export class DraggableObject extends BaseObject {
   dragStartY: number = 0;
   initialX: number = 0;
   initialY: number = 0;
-  draggingId: string = UIWINDOW_HITBOX_KEY;
+  entity: EcsEntity | null = null;
 
   override elements: DraggableChild[] = [];
+  private _hb: HitboxComponent | undefined;
 
-  constructor(...args: any[]) {
+  constructor(
+    public ecs: ECS,
+    ...args: any[]
+  ) {
     super(...(args as []));
   }
 
-  registerDragging = (id?: string) => {
+  registerDragging = () => {
     if (this.canvas === null) {
       return;
     }
-    this.draggingId = id ?? UIWINDOW_HITBOX_KEY;
-    this.interactionManager.upsertHitbox(this.draggingId, {
-      getBoundingBox: this.getBBox,
-      callbacks: {
-        mousemove: this._mouseHover,
-        mousedown: this._mouseDown,
-        mouseup: this._mouseUp,
-      },
-      color: this.interactionManager.colorHeap.getNext(),
-    });
+    this.entity = this.ecs.addEntity();
+
+    //
+    this.ecs.addComponent(
+      this.entity,
+      new HitboxComponent(
+        this.entity,
+        100,
+        {
+          mousemove: this._mouseHover,
+          mousedown: this._mouseDown,
+          mouseup: this._mouseUp,
+        },
+        undefined,
+        this.getBBox,
+        undefined,
+        this.interactionManager.colorHeap.getNext(),
+        undefined,
+      ),
+    );
   };
 
   deregister = () => {
-    this.interactionManager.removeHitbox(this.draggingId);
+    if (this.entity) this.ecs.removeComponent(this.entity, HitboxComponent);
   };
 
   override getBBox = () => {
@@ -71,7 +89,7 @@ export class DraggableObject extends BaseObject {
   };
 
   _mouseDown = (ev: MouseEvent): void => {
-    if (ev.buttons !== 1 || this.isDragging) {
+    if (ev.buttons !== 1 || this.isDragging || !this.entity) {
       return;
     }
     this.isDragging = true;
@@ -85,16 +103,17 @@ export class DraggableObject extends BaseObject {
       el.initialY = el.y;
     });
 
-    this.interactionManager.upsertHitbox(this.draggingId, {
-      data: { isDragging: true },
-    });
+    this._hb = this.ecs.getComponents(this.entity)?.get(HitboxComponent);
+    if (!this._hb) return;
+    this._hb.data = { ...this._hb.data, isDragging: true };
   };
 
   _mouseUp = (_ev: MouseEvent): void => {
     this.isDragging = false;
-    this.interactionManager.upsertHitbox(this.draggingId, {
-      data: { isDragging: false },
-    });
+    if (!this.entity) return;
+    this._hb = this.ecs.getComponents(this.entity)?.get(HitboxComponent);
+    if (!this._hb) return;
+    this._hb.data = { ...this._hb.data, isDragging: false };
   };
 }
 // }

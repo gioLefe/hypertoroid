@@ -5,3 +5,4 @@ export * from "./interaction-manager";
 export * from "./scene-manager";
 export * from "./settings";
 export * from "./types";
+export * from "./ecs";

@@ -1,3 +1,4 @@
+import { ECS } from "../../core";
 import { DraggableObject } from "../../mixins";
 
 export const HEADER_HEIGHT = 30;
@@ -11,8 +12,12 @@ export class UIWindow extends DraggableObject {
   protected textColor = "white";
   protected title: string = "UI Window";
 
-  constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
-    super();
+  constructor(
+    canvas: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    ecs: ECS,
+  ) {
+    super(ecs);
     this.canvas = canvas;
     this.ctx = ctx;
 
@@ -23,12 +28,8 @@ export class UIWindow extends DraggableObject {
     this.height = 200;
   }
 
-  override async init(
-    _deltaTime: number,
-    id: string,
-    ..._args: []
-  ): Promise<any> {
-    this.registerDragging(id);
+  override async init(_deltaTime: number, ..._args: []): Promise<any> {
+    this.registerDragging();
   }
   override update(_deltaTime: number): any {}
   override render() {
@@ -53,7 +54,7 @@ export class UIWindow extends DraggableObject {
       this.width,
       HEADER_HEIGHT,
       this.title,
-      true
+      true,
     );
   }
   override clean() {
@@ -66,7 +67,7 @@ export class UIWindow extends DraggableObject {
     width: number,
     height: number,
     title: string,
-    showCloseButton: boolean = true
+    showCloseButton: boolean = true,
   ) {
     // Draw header background
     ctx.fillStyle = "#333";
@@ -90,7 +91,7 @@ export class UIWindow extends DraggableObject {
         position.x + width - buttonSize - 10,
         position.y + 7,
         buttonSize,
-        buttonSize
+        buttonSize,
       );
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 2;
@@ -98,7 +99,7 @@ export class UIWindow extends DraggableObject {
         position.x + width - buttonSize - 10,
         position.y + 7,
         buttonSize,
-        buttonSize
+        buttonSize,
       );
       ctx.fillStyle = "white";
       ctx.font = "12px Arial";
