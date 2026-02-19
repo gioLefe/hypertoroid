@@ -87,14 +87,6 @@ export class ECS {
     this.systemOrder.sort((a, b) => a.priority - b.priority);
   }
 
-  /**
-   * Note: I never actually had a removeSystem() method for the entire
-   * time I was programming the game Fallgate (2 years!). I just added
-   * one here for a specific testing reason (see the next post).
-   * Because it's just for demo purposes, this requires an actual
-   * instance of a System to remove (which would be clunky as a real
-   * API).
-   */
   public removeSystem(system: EcsSystem): void {
     this.systems.delete(system);
     const index = this.systemOrder.indexOf(system);
@@ -108,12 +100,12 @@ export class ECS {
    * updates all Systems in priority order, then destroys any Entities
    * that were marked for removal.
    */
-  public update(): void {
+  public async update(deltaTime: number = 0): Promise<void> {
     // Update all systems in priority order (ascending)
     for (const system of this.systemOrder) {
       const entities = this.systems.get(system);
       if (entities !== undefined) {
-        system.update(entities);
+        await system.update(entities, deltaTime);
       }
     }
 
@@ -161,11 +153,12 @@ export class ECS {
     predicate: (component: T) => boolean,
   ): EcsEntity | undefined {
     for (const [entity, components] of this.entities) {
-      if (components.has(componentClass)) {
-        const component = components.get(componentClass);
-        if (predicate(component)) {
-          return entity;
-        }
+      if (!components.has(componentClass)) {
+        continue;
+      }
+      const component = components.get(componentClass);
+      if (predicate(component!)) {
+        return entity;
       }
     }
 
@@ -186,11 +179,12 @@ export class ECS {
     const results: EcsEntity[] = [];
 
     for (const [entity, components] of this.entities) {
-      if (components.has(componentClass)) {
-        const component = components.get(componentClass);
-        if (predicate(component)) {
-          results.push(entity);
-        }
+      if (!components.has(componentClass)) {
+        continue;
+      }
+      const component = components.get(componentClass);
+      if (predicate(component!)) {
+        results.push(entity);
       }
     }
 

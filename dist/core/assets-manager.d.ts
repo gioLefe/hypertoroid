@@ -9,7 +9,7 @@ export declare class AssetsManager implements AssetsHandler {
     addTag(id: string, tag: Tag): void;
     update<T extends ImageAsset | SoundAsset | GenericFileAsset>(id: string, asset: T): void;
     updateId(oldId: string, newId: string): void;
-    ensureLoaded<T extends (ImageAsset | SoundAsset | GenericFileAsset), K extends GameAssetRequest>(requests: K[]): Promise<T[]>;
-    private createObjectPromise;
+    ensureLoaded<T extends ImageAsset | SoundAsset | GenericFileAsset, K extends GameAssetRequest>(requests: K[]): Promise<T[]>;
+    fetchAsync(assetManagerHandle: this, assetRequest: GameAssetRequest): Promise<GameAssetRequest>;
 }
 //# sourceMappingURL=assets-manager.d.ts.map

@@ -9,8 +9,10 @@ export class ComponentContainer {
     this.map.set(component.constructor, component);
   }
 
-  public get<T extends EcsComponent>(componentClass: ComponentClass<T>): T {
-    return this.map.get(componentClass) as T;
+  public get<T extends EcsComponent>(
+    componentClass: ComponentClass<T>,
+  ): T | undefined {
+    return this.map.get(componentClass) as T | undefined;
   }
 
   public has(componentClass: Function): boolean {

@@ -9,5 +9,6 @@ export interface AssetsHandler {
     update<T extends ImageAsset | SoundAsset | GenericFileAsset>(id: string, asset: T): void;
     updateId(oldId: string, newId: string): void;
     ensureLoaded<T extends ImageAsset | SoundAsset | GenericFileAsset, K extends GameAssetRequest>(requests: K[]): Promise<T[]>;
+    fetchAsync(assetManagerHandle: this, assetRequest: GameAssetRequest): Promise<GameAssetRequest>;
 }
 //# sourceMappingURL=assets-handler.d.ts.map

@@ -23,7 +23,10 @@ export abstract class EcsSystem {
   /**
    * update() is called on the System every frame.
    */
-  public abstract update(entities: Set<EcsEntity>): void;
+  public abstract update(
+    entities: Set<EcsEntity>,
+    deltaTime: number,
+  ): Promise<void> | void;
 
   /**
    * The ECS is given to all Systems. Systems contain most of the game

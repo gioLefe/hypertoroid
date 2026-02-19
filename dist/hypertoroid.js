@@ -8,9 +8,7 @@ var AssetsManager = class {
     __publicField(this, "assets", /* @__PURE__ */ new Map());
   }
   add(assetRequests) {
-    return assetRequests.map(
-      (request) => this.createObjectPromise(this, request)
-    );
+    return assetRequests.map((request) => this.fetchAsync(this, request));
   }
   find(id) {
     return this.assets.get(id);
@@ -51,17 +49,15 @@ var AssetsManager = class {
     const loadPromises = [];
     requests.forEach((request) => {
       if (this.assets.has(request.id) === false) {
-        loadPromises.push(this.createObjectPromise(this, request));
+        loadPromises.push(this.fetchAsync(this, request));
       }
     });
     await Promise.allSettled(loadPromises);
     return Promise.resolve(
-      requests.map(
-        (request) => this.assets.get(request.id)
-      )
+      requests.map((request) => this.assets.get(request.id))
     );
   }
-  createObjectPromise(assetManagerHandle, assetRequest) {
+  async fetchAsync(assetManagerHandle, assetRequest) {
     return new Promise((resolve, reject) => {
       let obj;
       let responseType;
@@ -161,19 +157,23 @@ var Game = class {
       update: false,
       render: false
     });
-    __publicField(this, "gameLoop", (timestamp) => {
+    __publicField(this, "gameLoop", async (timestamp) => {
       this.elapsedTime = timestamp - this.lastUpdateTime;
+      this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
       if (this.elapsedTime > this.frameInterval) {
         this.cycleStartTime = performance.now();
-        this.update(this.fixedDeltaTime);
-        this.render(this.ctx);
-        this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
+        try {
+          this.update(this.fixedDeltaTime);
+          await this.render(this.ctx, this.elapsedTime);
+        } catch (err) {
+          console.error(err);
+        }
         this.cycleElapsed = performance.now() - this.cycleStartTime;
         if (this.cycleElapsed > 0) {
           this.settingsManager?.set(GAME_LOOP_TIME, this.cycleElapsed);
         }
       }
-      requestAnimationFrame(this.gameLoop);
+      requestAnimationFrame(await this.gameLoop);
     });
     if (canvas === null) {
       console.error(`%c *** Error, Canvas cannot be null`);
@@ -235,7 +235,7 @@ var Game = class {
       }
     }
   }
-  render(..._args) {
+  async render(_ctx, deltaTime, ..._args) {
     if (this.debug.render) {
       console.log(`%c *** Render`, `background:#020; color:#adad00`);
     }
@@ -246,7 +246,7 @@ var Game = class {
       return;
     }
     for (let i = 0; i < currentScenes.length; i++) {
-      currentScenes[i].render(this.ctx);
+      await currentScenes[i].render(this.ctx, deltaTime);
     }
   }
   start() {
@@ -1085,14 +1085,6 @@ var ECS = class {
     this.systemOrder.push(system);
     this.systemOrder.sort((a, b) => a.priority - b.priority);
   }
-  /**
-   * Note: I never actually had a removeSystem() method for the entire
-   * time I was programming the game Fallgate (2 years!). I just added
-   * one here for a specific testing reason (see the next post).
-   * Because it's just for demo purposes, this requires an actual
-   * instance of a System to remove (which would be clunky as a real
-   * API).
-   */
   removeSystem(system) {
     this.systems.delete(system);
     const index = this.systemOrder.indexOf(system);
@@ -1105,11 +1097,11 @@ var ECS = class {
    * updates all Systems in priority order, then destroys any Entities
    * that were marked for removal.
    */
-  update() {
+  async update(deltaTime = 0) {
     for (const system of this.systemOrder) {
       const entities = this.systems.get(system);
       if (entities !== void 0) {
-        system.update(entities);
+        await system.update(entities, deltaTime);
       }
     }
     while (this.entitiesToDestroy.length > 0) {
@@ -1144,11 +1136,12 @@ var ECS = class {
    */
   findEntityByComponentValue(componentClass, predicate) {
     for (const [entity, components] of this.entities) {
-      if (components.has(componentClass)) {
-        const component = components.get(componentClass);
-        if (predicate(component)) {
-          return entity;
-        }
+      if (!components.has(componentClass)) {
+        continue;
+      }
+      const component = components.get(componentClass);
+      if (predicate(component)) {
+        return entity;
       }
     }
     return void 0;
@@ -1163,11 +1156,12 @@ var ECS = class {
   findEntitiesByComponentValue(componentClass, predicate) {
     const results = [];
     for (const [entity, components] of this.entities) {
-      if (components.has(componentClass)) {
-        const component = components.get(componentClass);
-        if (predicate(component)) {
-          results.push(entity);
-        }
+      if (!components.has(componentClass)) {
+        continue;
+      }
+      const component = components.get(componentClass);
+      if (predicate(component)) {
+        results.push(entity);
       }
     }
     return results;
@@ -1220,10 +1214,10 @@ var EcsSystem = class {
 
 // src/core/ecs/components/hitbox-component.ts
 var HitboxComponent = class extends EcsComponent {
-  constructor(id, layer, callbacks, data, getBoundingBox, hitTest, color, image) {
+  constructor(id, priority, callbacks, data, getBoundingBox, hitTest, color, image) {
     super();
     this.id = id;
-    this.layer = layer;
+    this.priority = priority;
     this.callbacks = callbacks;
     this.data = data;
     this.getBoundingBox = getBoundingBox;
@@ -1385,7 +1379,7 @@ var InteractionManager = class {
     for (let i = 0; i < entities.length; i++) {
       const hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
       if (hb && this.hitTest(hb, point)) {
-        const layer = hb.layer ?? 0;
+        const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;
           winner = hb;
@@ -1432,6 +1426,7 @@ var SceneManager = class {
   constructor() {
     __publicField(this, "currentScenes", []);
     __publicField(this, "scenes", []);
+    __publicField(this, "_newSceneInitPromises");
   }
   addScene(scene) {
     if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
@@ -1471,9 +1466,13 @@ var SceneManager = class {
       }
       this.currentScenes.push(loadingScene);
     }
-    const newSceneInitPromises = newScene.init();
-    if (newSceneInitPromises !== void 0) {
-      await newSceneInitPromises;
+    try {
+      this._newSceneInitPromises = await newScene.init();
+    } catch (err) {
+      console.error(err);
+    }
+    if (this._newSceneInitPromises !== void 0) {
+      await this._newSceneInitPromises;
     }
     if (cleanPreviousState && lastCurrentSceneId !== void 0) {
       this.deleteScene(lastCurrentSceneId);
@@ -1491,6 +1490,49 @@ var SceneManager = class {
     return loadingSceneIndex;
   }
 };
+
+// src/core/request.ts
+async function asyncReq(path, assetType) {
+  return new Promise((resolve, reject) => {
+    let responseType = "";
+    switch (assetType) {
+      case "AUDIO":
+        responseType = "arraybuffer";
+        break;
+      case "JSON":
+        responseType = "json";
+        break;
+    }
+    switch (assetType) {
+      case "TEXT":
+      case "JSON":
+      case "AUDIO":
+        const request = new XMLHttpRequest();
+        request.open("GET", path, true);
+        request.responseType = responseType;
+        request.onload = function() {
+          return resolve(request.response);
+        };
+        request.onerror = function() {
+          reject(`cannot load ${path} at ${path}`);
+        };
+        request.send();
+        break;
+      case "IMAGE":
+        let obj = new Image();
+        obj.onload = function() {
+          return resolve(obj);
+        };
+        obj.onerror = function() {
+          reject(`cannot load ${path} at ${path}`);
+        };
+        obj.src = path;
+        break;
+      default:
+        reject(`unsupported asset type ${assetType}`);
+    }
+  });
+}
 
 // src/mixins/with-dragging.ts
 var DraggableObject = class extends BaseObject {
@@ -1978,6 +2020,7 @@ export {
   UIWindow,
   YELLOW,
   angleBetween,
+  asyncReq,
   calculateEdgesPerpendiculars,
   calculateNormals,
   colorToString,

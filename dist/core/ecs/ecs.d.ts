@@ -26,21 +26,13 @@ export declare class ECS {
     getAllEntities(): ReadonlyMap<EcsEntity, ComponentContainer>;
     removeComponent(entity: EcsEntity, componentClass: Function): void;
     addSystem(system: EcsSystem): void;
-    /**
-     * Note: I never actually had a removeSystem() method for the entire
-     * time I was programming the game Fallgate (2 years!). I just added
-     * one here for a specific testing reason (see the next post).
-     * Because it's just for demo purposes, this requires an actual
-     * instance of a System to remove (which would be clunky as a real
-     * API).
-     */
     removeSystem(system: EcsSystem): void;
     /**
      * This is ordinarily called once per tick (e.g., every frame). It
      * updates all Systems in priority order, then destroys any Entities
      * that were marked for removal.
      */
-    update(): void;
+    update(deltaTime?: number): Promise<void>;
     /**
      * Find all entities that have a specific component type.
      *

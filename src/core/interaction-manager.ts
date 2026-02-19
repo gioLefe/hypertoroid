@@ -138,7 +138,7 @@ export class InteractionManager {
     for (let i = 0; i < entities.length; i++) {
       const hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
       if (hb && this.hitTest(hb, point)) {
-        const layer = hb.layer ?? 0;
+        const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;
           winner = hb;

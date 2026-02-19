@@ -5,6 +5,8 @@ export class SceneManager implements SceneHandler {
   private currentScenes: CanvasScene2D[] = [];
   private scenes: CanvasScene2D[] = [];
 
+  private _newSceneInitPromises: Promise<any> | undefined;
+
   addScene(scene: CanvasScene2D): void {
     if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
       console.warn("Scene with same id already exists, provide a new id");
@@ -51,10 +53,14 @@ export class SceneManager implements SceneHandler {
       this.currentScenes.push(loadingScene);
     }
 
-    const newSceneInitPromises = newScene.init();
+    try {
+      this._newSceneInitPromises = await newScene.init();
+    } catch (err) {
+      console.error(err);
+    }
 
-    if (newSceneInitPromises !== undefined) {
-      await newSceneInitPromises;
+    if (this._newSceneInitPromises !== undefined) {
+      await this._newSceneInitPromises;
     }
     if (cleanPreviousState && lastCurrentSceneId !== undefined) {
       this.deleteScene(lastCurrentSceneId);

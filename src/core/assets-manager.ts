@@ -6,13 +6,11 @@ export class AssetsManager implements AssetsHandler {
   assets: Map<string, ImageAsset | SoundAsset | GenericFileAsset> = new Map();
 
   add(assetRequests: GameAssetRequest[]): Promise<GameAssetRequest>[] {
-    return assetRequests.map((request) =>
-      this.createObjectPromise(this, request)
-    );
+    return assetRequests.map((request) => this.fetchAsync(this, request));
   }
 
   find<T = ImageAsset | SoundAsset | GenericFileAsset>(
-    id: string
+    id: string,
   ): T | undefined {
     return this.assets.get(id) as T;
   }
@@ -30,7 +28,7 @@ export class AssetsManager implements AssetsHandler {
   }
   update<T extends ImageAsset | SoundAsset | GenericFileAsset>(
     id: string,
-    asset: T
+    asset: T,
   ): void {
     if (this.assets.has(id) === false) {
       console.warn(`Cannot find asset ${id}`);
@@ -52,28 +50,26 @@ export class AssetsManager implements AssetsHandler {
     this.assets.delete(oldId);
   }
 
-  async ensureLoaded<T extends (ImageAsset | SoundAsset | GenericFileAsset), K extends GameAssetRequest>(
-    requests: K[]
-  ): Promise<T[]> {
+  async ensureLoaded<
+    T extends ImageAsset | SoundAsset | GenericFileAsset,
+    K extends GameAssetRequest,
+  >(requests: K[]): Promise<T[]> {
     const loadPromises: Promise<GameAssetRequest>[] = [];
     requests.forEach((request) => {
       if (this.assets.has(request.id) === false) {
-        loadPromises.push(this.createObjectPromise(this, request));
+        loadPromises.push(this.fetchAsync(this, request));
       }
     });
     await Promise.allSettled(loadPromises);
 
     return Promise.resolve(
-      requests.map(
-        (request) =>
-          this.assets.get(request.id) as T
-      )
+      requests.map((request) => this.assets.get(request.id) as T),
     );
   }
 
-  private createObjectPromise(
+  async fetchAsync(
     assetManagerHandle: this,
-    assetRequest: GameAssetRequest
+    assetRequest: GameAssetRequest,
   ): Promise<GameAssetRequest> {
     return new Promise<GameAssetRequest>((resolve, reject) => {
       let obj: HTMLImageElement;

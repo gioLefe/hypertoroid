@@ -21,8 +21,8 @@ export declare abstract class Game implements GameCycle {
     clean(..._args: any): void;
     init(): Promise<void>;
     update(deltaTime: number): void;
-    render(..._args: any): void;
-    gameLoop: (timestamp: DOMHighResTimeStamp) => void;
+    render(_ctx: CanvasRenderingContext2D, deltaTime: number, ..._args: any): Promise<void>;
+    gameLoop: (timestamp: DOMHighResTimeStamp) => Promise<void>;
     start(): void;
 }
 //# sourceMappingURL=game.d.ts.map

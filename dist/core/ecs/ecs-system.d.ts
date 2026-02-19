@@ -20,7 +20,7 @@ export declare abstract class EcsSystem {
     /**
      * update() is called on the System every frame.
      */
-    abstract update(entities: Set<EcsEntity>): void;
+    abstract update(entities: Set<EcsEntity>, deltaTime: number): Promise<void> | void;
     /**
      * The ECS is given to all Systems. Systems contain most of the game
      * code, so they need to be able to create, mutate, and destroy

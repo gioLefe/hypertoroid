@@ -112,7 +112,11 @@ export abstract class Game implements GameCycle {
     }
   }
 
-  render(..._args: any): void {
+  async render(
+    _ctx: CanvasRenderingContext2D,
+    deltaTime: number,
+    ..._args: any
+  ): Promise<void> {
     if (this.debug.render) {
       console.log(`%c *** Render`, `background:#020; color:#adad00`);
     }
@@ -125,30 +129,33 @@ export abstract class Game implements GameCycle {
     }
 
     for (let i = 0; i < currentScenes.length; i++) {
-      currentScenes[i].render(this.ctx);
+      await currentScenes[i].render(this.ctx, deltaTime);
     }
   }
 
-  gameLoop = (timestamp: DOMHighResTimeStamp): void => {
+  gameLoop = async (timestamp: DOMHighResTimeStamp): Promise<void> => {
     this.elapsedTime = timestamp - this.lastUpdateTime;
+    this.lastUpdateTime = timestamp - (this.elapsedTime % this.frameInterval);
 
     // Update and render the game only if enough time has elapsed
     if (this.elapsedTime > this.frameInterval) {
       this.cycleStartTime = performance.now();
 
-      this.update(this.fixedDeltaTime);
-      this.render(this.ctx);
+      try {
+        this.update(this.fixedDeltaTime);
+        await this.render(this.ctx, this.elapsedTime);
+      } catch (err) {
+        console.error(err);
+      }
 
       // Account for frame timing drift
-      this.lastUpdateTime = timestamp - (this.elapsedTime % this.frameInterval);
-
       this.cycleElapsed = performance.now() - this.cycleStartTime;
 
       if (this.cycleElapsed > 0) {
         this.settingsManager?.set<number>(GAME_LOOP_TIME, this.cycleElapsed);
       }
     }
-    requestAnimationFrame(this.gameLoop);
+    requestAnimationFrame(await this.gameLoop);
   };
 
   start(): void {

@@ -26,7 +26,7 @@ export type HTMLEventCallback = Partial<{
 export class HitboxComponent extends EcsComponent {
   constructor(
     public id: EcsEntity,
-    public layer?: number, // 0-100, higher = higher priority. Defaults to 0.
+    public priority?: number, // 0-100, higher = higher priority. Defaults to 0.
     public callbacks?: HTMLEventCallback,
     public data?: Partial<HitboxData>,
     // Spatial definition (at least one should be provided)

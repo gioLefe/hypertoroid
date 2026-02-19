@@ -3,6 +3,7 @@ import { SceneHandler } from "./types/scene-handler";
 export declare class SceneManager implements SceneHandler {
     private currentScenes;
     private scenes;
+    private _newSceneInitPromises;
     addScene(scene: CanvasScene2D): void;
     deleteScene(id: string): void;
     getCurrentScenes(): CanvasScene2D[] | undefined;

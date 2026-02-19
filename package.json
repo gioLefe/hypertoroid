@@ -1,6 +1,6 @@
 {
   "name": "hypertoroid",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "main": "./dist/hypertoroid.js",
   "types": "./dist/hypertoroid.d.ts",
   "type": "module",
@@ -36,7 +36,7 @@
     "@eslint/js": "^9.39.2",
     "eslint": "^9.39.2",
     "prettier": "^3.7.4",
-    "typescript-eslint": "^8.52.0",
+    "typescript-eslint": "^8.54.0",
     "esbuild": "^0.27.2",
     "vitest": "^4.0.18"
   }

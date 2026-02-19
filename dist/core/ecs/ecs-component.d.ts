@@ -4,7 +4,7 @@ type ComponentClass<T extends EcsComponent> = new (...args: any[]) => T;
 export declare class ComponentContainer {
     private map;
     add(component: EcsComponent): void;
-    get<T extends EcsComponent>(componentClass: ComponentClass<T>): T;
+    get<T extends EcsComponent>(componentClass: ComponentClass<T>): T | undefined;
     has(componentClass: Function): boolean;
     hasAll(componentClasses: Iterable<Function>): boolean;
     delete(componentClass: Function): void;

@@ -6,4 +6,5 @@ export * from "./scene-manager";
 export * from "./settings";
 export * from "./types";
 export * from "./ecs";
+export * from "./request";
 //# sourceMappingURL=index.d.ts.map

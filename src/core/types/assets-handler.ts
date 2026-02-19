@@ -5,16 +5,16 @@ export interface AssetsHandler {
   assets: Map<string, ImageAsset | GenericFileAsset | SoundAsset> | undefined;
 
   add<T extends GameAssetRequest>(
-    assetRequests: T[]
+    assetRequests: T[],
   ): Promise<GameAssetRequest>[];
   find<T = ImageAsset | GenericFileAsset | SoundAsset>(
-    id: string
+    id: string,
   ): T | undefined;
   delete(id: string): void;
   addTag(id: string, tag: Tag): void;
   update<T extends ImageAsset | SoundAsset | GenericFileAsset>(
     id: string,
-    asset: T
+    asset: T,
   ): void;
   updateId(oldId: string, newId: string): void;
 
@@ -22,6 +22,11 @@ export interface AssetsHandler {
     T extends ImageAsset | SoundAsset | GenericFileAsset,
     K extends GameAssetRequest,
   >(
-    requests: K[]
+    requests: K[],
   ): Promise<T[]>;
+
+  fetchAsync(
+    assetManagerHandle: this,
+    assetRequest: GameAssetRequest,
+  ): Promise<GameAssetRequest>;
 }
