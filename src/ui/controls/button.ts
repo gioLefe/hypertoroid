@@ -57,7 +57,7 @@ export class UIButton extends BaseObject {
           mouseout: this.mouseOut,
         },
         undefined,
-        this.getBBox,
+        this.getBBox(),
         undefined,
         this.interactionManager.colorHeap.getNext(),
       ),

@@ -15,7 +15,7 @@ export class InteractionManager {
   static INSTANCE_ID = "InteractionManager";
 
   private canvas: HTMLCanvasElement;
-  private hitBoxCanvas: OffscreenCanvas = new OffscreenCanvas(0, 0);
+
   private colorizedCache = new Map<string, OffscreenCanvas>();
 
   private mouseMoveTargetId: EcsEntity | null = null;
@@ -25,15 +25,21 @@ export class InteractionManager {
   private _point: Vec2<number> = { x: 0, y: 0 };
 
   colorHeap = new ColorHeap();
-  hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D =
-    this.hitBoxCanvas.getContext("2d", { willReadFrequently: true })!;
+  hitBoxCanvas: OffscreenCanvas | undefined;
+  hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D | undefined;
 
   constructor(
     canvas: HTMLCanvasElement,
     private ecs: ECS,
   ) {
     this.canvas = canvas;
-    this.updateCanvasSize(canvas.width, canvas.height);
+    this.hitBoxCanvas = new OffscreenCanvas(
+      this.canvas.width,
+      this.canvas.height,
+    );
+    this.hitBoxOffscreenCtx = this.hitBoxCanvas?.getContext("2d", {
+      willReadFrequently: true,
+    })!;
   }
 
   registerEventListener(
@@ -54,6 +60,7 @@ export class InteractionManager {
   }
 
   updateCanvasSize(width: number, height: number): void {
+    if (!this.hitBoxCanvas) return;
     this.hitBoxCanvas.width = width;
     this.hitBoxCanvas.height = height;
   }
@@ -76,13 +83,13 @@ export class InteractionManager {
       const entity = this.ecs.findEntitiesByComponent(
         KeyboardFocusTagComponent,
       );
-      console.log(`entity:`, entity[0]);
       if (entity.length) {
         const components = this.ecs.getComponents(entity[0]);
 
         const focusedHitbox = components?.get(HitboxComponent);
         const callback = focusedHitbox?.callbacks?.[evType];
         if (callback) {
+          console.log(`callback ${evType}`, focusedHitbox.id);
           callback(htmlEv);
         }
         return; // Don't bubble to other listeners
@@ -130,52 +137,50 @@ export class InteractionManager {
    * Returns undefined if no hitbox matches.
    */
   private getHitboxAt(point: Vec2<number>): HitboxComponent | undefined {
-    let winner: HitboxComponent | undefined;
     let highestLayer = -Infinity;
 
     const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
-
     for (let i = 0; i < entities.length; i++) {
       const hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
       if (hb && this.hitTest(hb, point)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;
-          winner = hb;
+          return hb;
         }
       }
     }
-
-    return winner;
+    return undefined;
   }
 
   private hitTest(
     hitboxComponent: HitboxComponent,
     point: Vec2<number>,
   ): boolean {
-    // preliminary: check point is in bbox
-    if (hitboxComponent.getBoundingBox) {
-      const bbox = hitboxComponent.getBoundingBox();
-      if (!bbox || !isPointInAlignedBBox(point, bbox)) {
-        return false;
-      }
+    if (!this.hitBoxOffscreenCtx) return false;
+    if (
+      !hitboxComponent.boundingBox ||
+      !isPointInAlignedBBox(point, hitboxComponent.boundingBox)
+    ) {
+      // preliminary: check point is in bbox
+      return false;
     }
 
     // custom hit test
     if (hitboxComponent.hitTest) {
-      console.log(`hittest`);
       return hitboxComponent.hitTest(point, this.hitBoxOffscreenCtx);
     }
 
     // color-based (offscreen canvas pixel-perfect)
     if (hitboxComponent.color) {
-      console.log(`color`);
-      const pixel = getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx);
-      return isSameColor(pixel, hitboxComponent.color);
+      return isSameColor(
+        getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx),
+        hitboxComponent.color,
+      );
     }
 
     // bbox passed or no constraints
-    return hitboxComponent.getBoundingBox !== undefined;
+    return hitboxComponent.boundingBox !== undefined;
   }
 
   private getCanvasHitbox(_evType: HTMLEventType): HitboxComponent | undefined {
@@ -187,9 +192,7 @@ export class InteractionManager {
     // Assumes there'sonly one entity with CanvasHitboxTagComponent
     const hb = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
 
-    if (!hb) {
-      return undefined;
-    }
+    if (!hb) return undefined;
     return hb;
   }
 

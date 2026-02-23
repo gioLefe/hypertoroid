@@ -806,20 +806,6 @@ function getCtxPixelColor(x, y, ctx) {
   pixelColorCache.a = data[3];
   return pixelColorCache;
 }
-function colorize(image, r, g, b) {
-  const imageSize = image.width;
-  const offscreen = new OffscreenCanvas(imageSize, imageSize);
-  const ctx = offscreen.getContext("2d");
-  ctx.drawImage(image, 0, 0);
-  const imageData = ctx.getImageData(0, 0, imageSize, imageSize);
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    imageData.data[i + 0] *= r;
-    imageData.data[i + 1] *= g;
-    imageData.data[i + 2] *= b;
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return offscreen;
-}
 
 // src/models/game-object.ts
 var GameObject = class {
@@ -1214,13 +1200,13 @@ var EcsSystem = class {
 
 // src/core/ecs/components/hitbox-component.ts
 var HitboxComponent = class extends EcsComponent {
-  constructor(id, priority, callbacks, data, getBoundingBox, hitTest, color, image) {
+  constructor(id, priority, callbacks, data, boundingBox, hitTest, color, image) {
     super();
     this.id = id;
     this.priority = priority;
     this.callbacks = callbacks;
     this.data = data;
-    this.getBoundingBox = getBoundingBox;
+    this.boundingBox = boundingBox;
     this.hitTest = hitTest;
     this.color = color;
     this.image = image;
@@ -1244,7 +1230,6 @@ var InteractionManager = class {
   constructor(canvas, ecs) {
     this.ecs = ecs;
     __publicField(this, "canvas");
-    __publicField(this, "hitBoxCanvas", new OffscreenCanvas(0, 0));
     __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
     __publicField(this, "mouseMoveTargetId", null);
     __publicField(this, "mouseOutCallback", null);
@@ -1252,19 +1237,20 @@ var InteractionManager = class {
     __publicField(this, "mouseUpCallback", null);
     __publicField(this, "_point", { x: 0, y: 0 });
     __publicField(this, "colorHeap", new ColorHeap());
-    __publicField(this, "hitBoxOffscreenCtx", this.hitBoxCanvas.getContext("2d", { willReadFrequently: true }));
+    __publicField(this, "hitBoxCanvas");
+    __publicField(this, "hitBoxOffscreenCtx");
     __publicField(this, "listener", (htmlEv) => {
       const evType = htmlEv.type;
       if (evType.indexOf("key") === 0) {
         const entity = this.ecs.findEntitiesByComponent(
           KeyboardFocusTagComponent
         );
-        console.log(`entity:`, entity[0]);
         if (entity.length) {
           const components = this.ecs.getComponents(entity[0]);
           const focusedHitbox = components?.get(HitboxComponent);
           const callback2 = focusedHitbox?.callbacks?.[evType];
           if (callback2) {
+            console.log(`callback ${evType}`, focusedHitbox.id);
             callback2(htmlEv);
           }
           return;
@@ -1336,7 +1322,13 @@ var InteractionManager = class {
       }
     });
     this.canvas = canvas;
-    this.updateCanvasSize(canvas.width, canvas.height);
+    this.hitBoxCanvas = new OffscreenCanvas(
+      this.canvas.width,
+      this.canvas.height
+    );
+    this.hitBoxOffscreenCtx = this.hitBoxCanvas?.getContext("2d", {
+      willReadFrequently: true
+    });
   }
   registerEventListener(evType, options) {
     this.canvas.addEventListener(evType, this.listener, options);
@@ -1351,6 +1343,7 @@ var InteractionManager = class {
     this.ecs.addComponent(entity, new KeyboardFocusTagComponent());
   }
   updateCanvasSize(width, height) {
+    if (!this.hitBoxCanvas) return;
     this.hitBoxCanvas.width = width;
     this.hitBoxCanvas.height = height;
   }
@@ -1373,7 +1366,6 @@ var InteractionManager = class {
    * Returns undefined if no hitbox matches.
    */
   getHitboxAt(point) {
-    let winner;
     let highestLayer = -Infinity;
     const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
     for (let i = 0; i < entities.length; i++) {
@@ -1382,29 +1374,27 @@ var InteractionManager = class {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;
-          winner = hb;
+          return hb;
         }
       }
     }
-    return winner;
+    return void 0;
   }
   hitTest(hitboxComponent, point) {
-    if (hitboxComponent.getBoundingBox) {
-      const bbox = hitboxComponent.getBoundingBox();
-      if (!bbox || !isPointInAlignedBBox(point, bbox)) {
-        return false;
-      }
+    if (!this.hitBoxOffscreenCtx) return false;
+    if (!hitboxComponent.boundingBox || !isPointInAlignedBBox(point, hitboxComponent.boundingBox)) {
+      return false;
     }
     if (hitboxComponent.hitTest) {
-      console.log(`hittest`);
       return hitboxComponent.hitTest(point, this.hitBoxOffscreenCtx);
     }
     if (hitboxComponent.color) {
-      console.log(`color`);
-      const pixel = getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx);
-      return isSameColor(pixel, hitboxComponent.color);
+      return isSameColor(
+        getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx),
+        hitboxComponent.color
+      );
     }
-    return hitboxComponent.getBoundingBox !== void 0;
+    return hitboxComponent.boundingBox !== void 0;
   }
   getCanvasHitbox(_evType) {
     const entity = this.ecs.findEntitiesByComponent(CanvasHitboxTagComponent);
@@ -1413,9 +1403,7 @@ var InteractionManager = class {
       return;
     }
     const hb = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
-    if (!hb) {
-      return void 0;
-    }
+    if (!hb) return void 0;
     return hb;
   }
 };
@@ -1566,7 +1554,7 @@ var DraggableObject = class extends BaseObject {
             mouseup: this._mouseUp
           },
           void 0,
-          this.getBBox,
+          this.getBBox(),
           void 0,
           this.interactionManager.colorHeap.getNext(),
           void 0
@@ -1717,7 +1705,7 @@ var UIButton = class extends BaseObject {
           mouseout: this.mouseOut
         },
         void 0,
-        this.getBBox,
+        this.getBBox(),
         void 0,
         this.interactionManager.colorHeap.getNext()
       )
@@ -2024,7 +2012,6 @@ export {
   calculateEdgesPerpendiculars,
   calculateNormals,
   colorToString,
-  colorize,
   createBoundingBox,
   createPolygon,
   createSquare,

@@ -54,7 +54,7 @@ export class DraggableObject extends BaseObject {
           mouseup: this._mouseUp,
         },
         undefined,
-        this.getBBox,
+        this.getBBox(),
         undefined,
         this.interactionManager.colorHeap.getNext(),
         undefined,

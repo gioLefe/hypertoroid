@@ -13,11 +13,11 @@ export declare class HitboxComponent extends EcsComponent {
     priority?: number | undefined;
     callbacks?: HTMLEventCallback | undefined;
     data?: Partial<HitboxData> | undefined;
-    getBoundingBox?: (() => BoundingBox<number> | undefined) | undefined;
+    boundingBox?: BoundingBox<number> | undefined;
     hitTest?: HitTestFn | undefined;
     color?: HitboxColor | undefined;
-    image?: HTMLImageElement | undefined;
+    image?: ImageBitmap | undefined;
     constructor(id: EcsEntity, priority?: number | undefined, // 0-100, higher = higher priority. Defaults to 0.
-    callbacks?: HTMLEventCallback | undefined, data?: Partial<HitboxData> | undefined, getBoundingBox?: (() => BoundingBox<number> | undefined) | undefined, hitTest?: HitTestFn | undefined, color?: HitboxColor | undefined, image?: HTMLImageElement | undefined);
+    callbacks?: HTMLEventCallback | undefined, data?: Partial<HitboxData> | undefined, boundingBox?: BoundingBox<number> | undefined, hitTest?: HitTestFn | undefined, color?: HitboxColor | undefined, image?: ImageBitmap | undefined);
 }
 //# sourceMappingURL=hitbox-component.d.ts.map

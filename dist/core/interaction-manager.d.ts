@@ -5,7 +5,6 @@ export declare class InteractionManager {
     private ecs;
     static INSTANCE_ID: string;
     private canvas;
-    private hitBoxCanvas;
     private colorizedCache;
     private mouseMoveTargetId;
     private mouseOutCallback;
@@ -13,7 +12,8 @@ export declare class InteractionManager {
     private mouseUpCallback;
     private _point;
     colorHeap: ColorHeap;
-    hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D;
+    hitBoxCanvas: OffscreenCanvas | undefined;
+    hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D | undefined;
     constructor(canvas: HTMLCanvasElement, ecs: ECS);
     registerEventListener(evType: HTMLEventType, options?: boolean | AddEventListenerOptions): void;
     registerKeyboardFocus(entity: EcsEntity): void;
