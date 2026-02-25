@@ -3,6 +3,7 @@ import { getCtxPixelColor, isSameColor, Vec2 } from "../models";
 import {
   Callback,
   CanvasHitboxTagComponent,
+  ComponentContainer,
   ECS,
   EcsEntity,
   HitboxComponent,
@@ -27,6 +28,11 @@ export class InteractionManager {
   colorHeap = new ColorHeap();
   hitBoxCanvas: OffscreenCanvas | undefined;
   hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D | undefined;
+
+  // Cached vars
+  private _entities: number[] = [];
+  private _hitBoxComponent: HitboxComponent | undefined;
+  private _components: ComponentContainer | undefined;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -80,13 +86,13 @@ export class InteractionManager {
     // Keyboard events: dispatch to all listeners
     if (evType.indexOf("key") === 0) {
       // If something has focus, only it receives the event
-      const entity = this.ecs.findEntitiesByComponent(
+      this._entities = this.ecs.findEntitiesByComponent(
         KeyboardFocusTagComponent,
       );
-      if (entity.length) {
-        const components = this.ecs.getComponents(entity[0]);
+      if (this._entities.length) {
+        this._components = this.ecs.getComponents(this._entities[0]);
 
-        const focusedHitbox = components?.get(HitboxComponent);
+        const focusedHitbox = this._components?.get(HitboxComponent);
         const callback = focusedHitbox?.callbacks?.[evType];
         if (callback) {
           console.log(`callback ${evType}`, focusedHitbox.id);
@@ -104,20 +110,20 @@ export class InteractionManager {
     if (!this._point) return;
 
     // Mouse/pointer events: find highest-priority hitbox and invoke only that
-    let hitBoxComponent = this.getHitboxAt(this._point);
-    if (!hitBoxComponent) {
+    this._hitBoxComponent = this.getHitboxAt(this._point);
+    if (!this._hitBoxComponent) {
       // No hitbox found; call global callbacks on canvas (if any registered)
-      hitBoxComponent = this.getCanvasHitbox(evType);
+      this._hitBoxComponent = this.getCanvasHitbox(evType);
     }
-    if (!hitBoxComponent) return;
+    if (!this._hitBoxComponent) return;
 
-    const callback = hitBoxComponent.callbacks?.[evType];
+    const callback = this._hitBoxComponent.callbacks?.[evType];
     if (callback) {
       callback(htmlEv);
     }
 
-    this.handleMouseButtonRelease(htmlEv, evType, hitBoxComponent);
-    this.handleMouseMove(htmlEv, evType, hitBoxComponent);
+    this.handleMouseButtonRelease(htmlEv, evType, this._hitBoxComponent);
+    this.handleMouseMove(htmlEv, evType, this._hitBoxComponent);
   };
 
   private extractPoint(
@@ -138,10 +144,13 @@ export class InteractionManager {
    */
   private getHitboxAt(point: Vec2<number>): HitboxComponent | undefined {
     let highestLayer = -Infinity;
+    let hb: HitboxComponent | undefined;
 
+    // TODO: Find hitboxes visible in the current camera bounds
+    // TODO: Consider saving hitboxes as in Color -> Hitbox, so that we can check the color at pointer with O(1)
     const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
     for (let i = 0; i < entities.length; i++) {
-      const hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
+      hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
       if (hb && this.hitTest(hb, point)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {

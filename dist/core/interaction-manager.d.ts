@@ -14,6 +14,9 @@ export declare class InteractionManager {
     colorHeap: ColorHeap;
     hitBoxCanvas: OffscreenCanvas | undefined;
     hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D | undefined;
+    private _entities;
+    private _hitBoxComponent;
+    private _components;
     constructor(canvas: HTMLCanvasElement, ecs: ECS);
     registerEventListener(evType: HTMLEventType, options?: boolean | AddEventListenerOptions): void;
     registerKeyboardFocus(entity: EcsEntity): void;

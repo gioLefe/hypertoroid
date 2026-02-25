@@ -1239,15 +1239,19 @@ var InteractionManager = class {
     __publicField(this, "colorHeap", new ColorHeap());
     __publicField(this, "hitBoxCanvas");
     __publicField(this, "hitBoxOffscreenCtx");
+    // Cached vars
+    __publicField(this, "_entities", []);
+    __publicField(this, "_hitBoxComponent");
+    __publicField(this, "_components");
     __publicField(this, "listener", (htmlEv) => {
       const evType = htmlEv.type;
       if (evType.indexOf("key") === 0) {
-        const entity = this.ecs.findEntitiesByComponent(
+        this._entities = this.ecs.findEntitiesByComponent(
           KeyboardFocusTagComponent
         );
-        if (entity.length) {
-          const components = this.ecs.getComponents(entity[0]);
-          const focusedHitbox = components?.get(HitboxComponent);
+        if (this._entities.length) {
+          this._components = this.ecs.getComponents(this._entities[0]);
+          const focusedHitbox = this._components?.get(HitboxComponent);
           const callback2 = focusedHitbox?.callbacks?.[evType];
           if (callback2) {
             console.log(`callback ${evType}`, focusedHitbox.id);
@@ -1262,17 +1266,17 @@ var InteractionManager = class {
       }
       this.extractPoint(htmlEv, this._point);
       if (!this._point) return;
-      let hitBoxComponent = this.getHitboxAt(this._point);
-      if (!hitBoxComponent) {
-        hitBoxComponent = this.getCanvasHitbox(evType);
+      this._hitBoxComponent = this.getHitboxAt(this._point);
+      if (!this._hitBoxComponent) {
+        this._hitBoxComponent = this.getCanvasHitbox(evType);
       }
-      if (!hitBoxComponent) return;
-      const callback = hitBoxComponent.callbacks?.[evType];
+      if (!this._hitBoxComponent) return;
+      const callback = this._hitBoxComponent.callbacks?.[evType];
       if (callback) {
         callback(htmlEv);
       }
-      this.handleMouseButtonRelease(htmlEv, evType, hitBoxComponent);
-      this.handleMouseMove(htmlEv, evType, hitBoxComponent);
+      this.handleMouseButtonRelease(htmlEv, evType, this._hitBoxComponent);
+      this.handleMouseMove(htmlEv, evType, this._hitBoxComponent);
     });
     /** Handle mouse button release across different hitboxes.
      * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
@@ -1367,9 +1371,10 @@ var InteractionManager = class {
    */
   getHitboxAt(point) {
     let highestLayer = -Infinity;
+    let hb;
     const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
     for (let i = 0; i < entities.length; i++) {
-      const hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
+      hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
       if (hb && this.hitTest(hb, point)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
