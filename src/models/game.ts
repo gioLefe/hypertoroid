@@ -8,6 +8,7 @@ import {
 } from "../core";
 import { GAME_LOOP_TIME } from "../core/settings";
 import { AssetsHandler } from "../core/types/assets-handler";
+import { CanvasScene2D } from "./canvas-scene";
 import { GameCycle } from "./game-cycle";
 
 export const SCENE_MANAGER_DI = "SceneManager";
@@ -16,6 +17,10 @@ export const ASSETS_MANAGER_DI = "AsetsManager";
 export abstract class Game implements GameCycle {
   protected canvas: HTMLCanvasElement;
   protected ctx: CanvasRenderingContext2D;
+  protected diContainer = DIContainer.getInstance();
+  protected sceneManager: SceneHandler | undefined;
+  protected assetsManager: AssetsHandler = new AssetsManager();
+  protected settingsManager: Settings | undefined;
 
   private lastUpdateTime: DOMHighResTimeStamp = 0;
   private cycleStartTime: DOMHighResTimeStamp = 0;
@@ -24,10 +29,8 @@ export abstract class Game implements GameCycle {
   private frameInterval: number = 0;
   private readonly fixedDeltaTime: number = 0;
 
-  protected diContainer = DIContainer.getInstance();
-  protected sceneManager: SceneHandler | undefined;
-  protected assetsManager: AssetsHandler = new AssetsManager();
-  protected settingsManager: Settings | undefined;
+  // cache
+  private _currentScenes: CanvasScene2D[] | undefined;
 
   private debug: { init: boolean; update: boolean; render: boolean } = {
     init: false,
@@ -96,16 +99,15 @@ export abstract class Game implements GameCycle {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
 
-    const currentScenes = this.sceneManager?.getCurrentScenes();
-    if (!currentScenes) {
+    this._currentScenes = this.sceneManager?.getCurrentScenes();
+    if (!this._currentScenes) {
       console.warn("no scene to update");
       return;
     }
 
-    for (let i = 0; i < currentScenes.length; i++) {
-      const scene = currentScenes[i];
+    for (let i = 0; i < this._currentScenes.length; i++) {
       try {
-        scene.update(deltaTime);
+        this._currentScenes[i].update(deltaTime);
       } catch (error) {
         console.error("Scene update failed:", error);
       }
@@ -122,14 +124,14 @@ export abstract class Game implements GameCycle {
     }
     this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    const currentScenes = this.sceneManager?.getCurrentScenes();
-    if (currentScenes === undefined) {
+    this._currentScenes = this.sceneManager?.getCurrentScenes();
+    if (this._currentScenes === undefined) {
       console.warn("no scene to render");
       return;
     }
 
-    for (let i = 0; i < currentScenes.length; i++) {
-      await currentScenes[i].render(this.ctx, deltaTime);
+    for (let i = 0; i < this._currentScenes.length; i++) {
+      await this._currentScenes[i].render(this.ctx, deltaTime);
     }
   }
 

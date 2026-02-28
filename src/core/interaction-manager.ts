@@ -148,10 +148,11 @@ export class InteractionManager {
 
     // TODO: Find hitboxes visible in the current camera bounds
     // TODO: Consider saving hitboxes as in Color -> Hitbox, so that we can check the color at pointer with O(1)
-    const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
-    for (let i = 0; i < entities.length; i++) {
-      hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
-      if (hb && this.hitTest(hb, point)) {
+    this._entities = this.ecs.findEntitiesByComponent(HitboxComponent);
+    for (let i = 0; i < this._entities.length; i++) {
+      this._components = this.ecs.getComponents(this._entities[i]);
+      hb = this._components?.get(HitboxComponent)!;
+      if (this.hitTest(hb, point)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;

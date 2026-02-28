@@ -9,6 +9,9 @@ export declare class ECS {
     private systemOrder;
     private nextEntityID;
     private entitiesToDestroy;
+    private _results;
+    private _targetEntities;
+    private _component;
     addEntity(): EcsEntity;
     /**
      * Marks `entity` for removal. The actual removal happens at the end

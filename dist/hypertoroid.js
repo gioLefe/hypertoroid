@@ -142,16 +142,18 @@ var Game = class {
   constructor(canvas, canvasWidth, canvasHeight, fps = 30) {
     __publicField(this, "canvas");
     __publicField(this, "ctx");
+    __publicField(this, "diContainer", DIContainer.getInstance());
+    __publicField(this, "sceneManager");
+    __publicField(this, "assetsManager", new AssetsManager());
+    __publicField(this, "settingsManager");
     __publicField(this, "lastUpdateTime", 0);
     __publicField(this, "cycleStartTime", 0);
     __publicField(this, "cycleElapsed", 0);
     __publicField(this, "elapsedTime", 0);
     __publicField(this, "frameInterval", 0);
     __publicField(this, "fixedDeltaTime", 0);
-    __publicField(this, "diContainer", DIContainer.getInstance());
-    __publicField(this, "sceneManager");
-    __publicField(this, "assetsManager", new AssetsManager());
-    __publicField(this, "settingsManager");
+    // cache
+    __publicField(this, "_currentScenes");
     __publicField(this, "debug", {
       init: false,
       update: false,
@@ -221,15 +223,14 @@ var Game = class {
     if (this.debug.update) {
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
     }
-    const currentScenes = this.sceneManager?.getCurrentScenes();
-    if (!currentScenes) {
+    this._currentScenes = this.sceneManager?.getCurrentScenes();
+    if (!this._currentScenes) {
       console.warn("no scene to update");
       return;
     }
-    for (let i = 0; i < currentScenes.length; i++) {
-      const scene = currentScenes[i];
+    for (let i = 0; i < this._currentScenes.length; i++) {
       try {
-        scene.update(deltaTime);
+        this._currentScenes[i].update(deltaTime);
       } catch (error) {
         console.error("Scene update failed:", error);
       }
@@ -240,13 +241,13 @@ var Game = class {
       console.log(`%c *** Render`, `background:#020; color:#adad00`);
     }
     this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    const currentScenes = this.sceneManager?.getCurrentScenes();
-    if (currentScenes === void 0) {
+    this._currentScenes = this.sceneManager?.getCurrentScenes();
+    if (this._currentScenes === void 0) {
       console.warn("no scene to render");
       return;
     }
-    for (let i = 0; i < currentScenes.length; i++) {
-      await currentScenes[i].render(this.ctx, deltaTime);
+    for (let i = 0; i < this._currentScenes.length; i++) {
+      await this._currentScenes[i].render(this.ctx, deltaTime);
     }
   }
   start() {
@@ -1021,6 +1022,10 @@ var ECS = class {
     // Bookkeeping for entities.
     __publicField(this, "nextEntityID", 0);
     __publicField(this, "entitiesToDestroy", new Array());
+    // Cache
+    __publicField(this, "_results", []);
+    __publicField(this, "_targetEntities");
+    __publicField(this, "_component");
   }
   // API: Entities
   addEntity() {
@@ -1085,10 +1090,9 @@ var ECS = class {
    */
   async update(deltaTime = 0) {
     for (const system of this.systemOrder) {
-      const entities = this.systems.get(system);
-      if (entities !== void 0) {
-        await system.update(entities, deltaTime);
-      }
+      this._targetEntities = this.systems.get(system);
+      if (this._targetEntities === void 0) continue;
+      await system.update(this._targetEntities, deltaTime);
     }
     while (this.entitiesToDestroy.length > 0) {
       const entity = this.entitiesToDestroy.pop();
@@ -1105,13 +1109,12 @@ var ECS = class {
    * @returns Array of entities that have the specified component
    */
   findEntitiesByComponent(componentClass) {
-    const results = [];
+    this._results = [];
     for (const [entity, components] of this.entities) {
-      if (components.has(componentClass)) {
-        results.push(entity);
-      }
+      if (!components.has(componentClass)) continue;
+      this._results.push(entity);
     }
-    return results;
+    return this._results;
   }
   /**
    * Find the first entity that has a specific component matching a predicate.
@@ -1122,13 +1125,10 @@ var ECS = class {
    */
   findEntityByComponentValue(componentClass, predicate) {
     for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) {
-        continue;
-      }
-      const component = components.get(componentClass);
-      if (predicate(component)) {
-        return entity;
-      }
+      if (!components.has(componentClass)) continue;
+      this._component = components.get(componentClass);
+      if (!predicate(this._component)) continue;
+      return entity;
     }
     return void 0;
   }
@@ -1140,17 +1140,14 @@ var ECS = class {
    * @returns Array of matching entities
    */
   findEntitiesByComponentValue(componentClass, predicate) {
-    const results = [];
+    this._results = [];
     for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) {
-        continue;
-      }
-      const component = components.get(componentClass);
-      if (predicate(component)) {
-        results.push(entity);
-      }
+      if (!components.has(componentClass)) continue;
+      this._component = components.get(componentClass);
+      if (!predicate(this._component)) continue;
+      this._results.push(entity);
     }
-    return results;
+    return this._results;
   }
   // Private methods for doing internal state checks and mutations.
   destroyEntity(entity) {
@@ -1174,7 +1171,7 @@ var ECS = class {
     }
   }
 };
-__publicField(ECS, "INSTANCE_ID", "ECS_MAIN_INSTANCE");
+__publicField(ECS, "INSTANCE_ID", "ECS");
 
 // src/core/ecs/ecs-system.ts
 var EcsSystem = class {
@@ -1372,10 +1369,11 @@ var InteractionManager = class {
   getHitboxAt(point) {
     let highestLayer = -Infinity;
     let hb;
-    const entities = this.ecs.findEntitiesByComponent(HitboxComponent);
-    for (let i = 0; i < entities.length; i++) {
-      hb = this.ecs.getComponents(entities[i])?.get(HitboxComponent);
-      if (hb && this.hitTest(hb, point)) {
+    this._entities = this.ecs.findEntitiesByComponent(HitboxComponent);
+    for (let i = 0; i < this._entities.length; i++) {
+      this._components = this.ecs.getComponents(this._entities[i]);
+      hb = this._components?.get(HitboxComponent);
+      if (this.hitTest(hb, point)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;

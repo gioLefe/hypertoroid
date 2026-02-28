@@ -7,7 +7,7 @@ type ComponentClass<T extends EcsComponent> = new (...args: any[]) => T;
 
 // Credits: https://maxwellforbes.com/posts/typescript-ecs-implementation/
 export class ECS {
-  static INSTANCE_ID = "ECS_MAIN_INSTANCE";
+  static INSTANCE_ID = "ECS";
 
   // Main state
   private entities = new Map<EcsEntity, ComponentContainer>();
@@ -19,6 +19,11 @@ export class ECS {
   // Bookkeeping for entities.
   private nextEntityID = 0;
   private entitiesToDestroy = new Array<EcsEntity>();
+
+  // Cache
+  private _results: EcsEntity[] = [];
+  private _targetEntities: Set<number> | undefined;
+  private _component: EcsComponent | undefined = undefined;
 
   // API: Entities
   public addEntity(): EcsEntity {
@@ -103,10 +108,10 @@ export class ECS {
   public async update(deltaTime: number = 0): Promise<void> {
     // Update all systems in priority order (ascending)
     for (const system of this.systemOrder) {
-      const entities = this.systems.get(system);
-      if (entities !== undefined) {
-        await system.update(entities, deltaTime);
-      }
+      this._targetEntities = this.systems.get(system);
+      if (this._targetEntities === undefined) continue;
+
+      await system.update(this._targetEntities, deltaTime);
     }
 
     // Remove any entities that were marked for deletion during the
@@ -130,15 +135,13 @@ export class ECS {
   public findEntitiesByComponent<T extends EcsComponent>(
     componentClass: ComponentClass<T>,
   ): EcsEntity[] {
-    const results: EcsEntity[] = [];
-
+    this._results = [];
     for (const [entity, components] of this.entities) {
-      if (components.has(componentClass)) {
-        results.push(entity);
-      }
+      if (!components.has(componentClass)) continue;
+      this._results.push(entity);
     }
 
-    return results;
+    return this._results;
   }
 
   /**
@@ -153,13 +156,12 @@ export class ECS {
     predicate: (component: T) => boolean,
   ): EcsEntity | undefined {
     for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) {
-        continue;
-      }
-      const component = components.get(componentClass);
-      if (predicate(component!)) {
-        return entity;
-      }
+      if (!components.has(componentClass)) continue;
+
+      this._component = components.get(componentClass);
+      if (!predicate((this._component as T)!)) continue;
+
+      return entity;
     }
 
     return undefined;
@@ -176,19 +178,19 @@ export class ECS {
     componentClass: ComponentClass<T>,
     predicate: (component: T) => boolean,
   ): EcsEntity[] {
-    const results: EcsEntity[] = [];
+    this._results = [];
 
     for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) {
-        continue;
-      }
-      const component = components.get(componentClass);
-      if (predicate(component!)) {
-        results.push(entity);
-      }
+      if (!components.has(componentClass)) continue;
+
+      this._component = components.get(componentClass) as
+        | EcsComponent
+        | undefined;
+      if (!predicate((this._component as T)!)) continue;
+      this._results.push(entity);
     }
 
-    return results;
+    return this._results;
   }
 
   // Private methods for doing internal state checks and mutations.
