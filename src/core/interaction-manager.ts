@@ -1,5 +1,5 @@
 import { ColorHeap, isPointInAlignedBBox } from "../helpers";
-import { getCtxPixelColor, isSameColor, Vec2 } from "../models";
+import { Color, getCtxPixelColor, isSameColor, Vec2 } from "../models";
 import {
   Callback,
   CanvasHitboxTagComponent,
@@ -15,24 +15,23 @@ import { HTMLEventType } from "./types";
 export class InteractionManager {
   static INSTANCE_ID = "InteractionManager";
 
-  private canvas: HTMLCanvasElement;
+  colorHeap = new ColorHeap();
+  hitBoxCanvas: OffscreenCanvas;
+  hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D;
 
+  private canvas: HTMLCanvasElement;
   private colorizedCache = new Map<string, OffscreenCanvas>();
 
   private mouseMoveTargetId: EcsEntity | null = null;
   private mouseOutCallback: Callback<"mouseout"> | null = null;
   private mouseDownTargetId: EcsEntity | null = null;
   private mouseUpCallback: Callback<"mouseup"> | null = null;
-  private _point: Vec2<number> = { x: 0, y: 0 };
-
-  colorHeap = new ColorHeap();
-  hitBoxCanvas: OffscreenCanvas | undefined;
-  hitBoxOffscreenCtx: OffscreenCanvasRenderingContext2D | undefined;
 
   // Cached vars
   private _entities: number[] = [];
   private _hitBoxComponent: HitboxComponent | undefined;
   private _components: ComponentContainer | undefined;
+  private _point: Vec2<number> = { x: 0, y: 0 };
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -110,17 +109,12 @@ export class InteractionManager {
     if (!this._point) return;
 
     // Mouse/pointer events: find highest-priority hitbox and invoke only that
-    this._hitBoxComponent = this.getHitboxAt(this._point);
-    if (!this._hitBoxComponent) {
-      // No hitbox found; call global callbacks on canvas (if any registered)
-      this._hitBoxComponent = this.getCanvasHitbox(evType);
-    }
+    this._hitBoxComponent =
+      this.getHitboxAt(this._point) ?? this.getCanvasHitbox(evType);
+
     if (!this._hitBoxComponent) return;
 
-    const callback = this._hitBoxComponent.callbacks?.[evType];
-    if (callback) {
-      callback(htmlEv);
-    }
+    this._hitBoxComponent.callbacks?.[evType]?.(htmlEv);
 
     this.handleMouseButtonRelease(htmlEv, evType, this._hitBoxComponent);
     this.handleMouseMove(htmlEv, evType, this._hitBoxComponent);
@@ -145,6 +139,12 @@ export class InteractionManager {
   private getHitboxAt(point: Vec2<number>): HitboxComponent | undefined {
     let highestLayer = -Infinity;
     let hb: HitboxComponent | undefined;
+    // TODO: Transform offscreen canvas into TypedArray and iterate into it for better performances
+    const pointColor = getCtxPixelColor(
+      point.x,
+      point.y,
+      this.hitBoxOffscreenCtx,
+    );
 
     // TODO: Find hitboxes visible in the current camera bounds
     // TODO: Consider saving hitboxes as in Color -> Hitbox, so that we can check the color at pointer with O(1)
@@ -152,7 +152,7 @@ export class InteractionManager {
     for (let i = 0; i < this._entities.length; i++) {
       this._components = this.ecs.getComponents(this._entities[i]);
       hb = this._components?.get(HitboxComponent)!;
-      if (this.hitTest(hb, point)) {
+      if (this.hitTest(hb, point, pointColor)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;
@@ -166,28 +166,22 @@ export class InteractionManager {
   private hitTest(
     hitboxComponent: HitboxComponent,
     point: Vec2<number>,
+    offsetXYColor: Color,
   ): boolean {
-    if (!this.hitBoxOffscreenCtx) return false;
+    // preliminary: check point is in bbox
     if (
       !hitboxComponent.boundingBox ||
       !isPointInAlignedBBox(point, hitboxComponent.boundingBox)
-    ) {
-      // preliminary: check point is in bbox
+    )
       return false;
-    }
 
     // custom hit test
-    if (hitboxComponent.hitTest) {
+    if (hitboxComponent.hitTest)
       return hitboxComponent.hitTest(point, this.hitBoxOffscreenCtx);
-    }
 
     // color-based (offscreen canvas pixel-perfect)
-    if (hitboxComponent.color) {
-      return isSameColor(
-        getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx),
-        hitboxComponent.color,
-      );
-    }
+    if (hitboxComponent.color)
+      return isSameColor(offsetXYColor, hitboxComponent.color);
 
     // bbox passed or no constraints
     return hitboxComponent.boundingBox !== undefined;
@@ -200,10 +194,7 @@ export class InteractionManager {
       return;
     }
     // Assumes there'sonly one entity with CanvasHitboxTagComponent
-    const hb = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
-
-    if (!hb) return undefined;
-    return hb;
+    return this.ecs.getComponents(entity[0])?.get(HitboxComponent);
   }
 
   /** Handle mouse button release across different hitboxes.

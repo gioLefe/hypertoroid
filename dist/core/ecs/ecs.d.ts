@@ -9,6 +9,7 @@ export declare class ECS {
     private systemOrder;
     private nextEntityID;
     private entitiesToDestroy;
+    private frameEnd;
     private _results;
     private _targetEntities;
     private _component;
@@ -59,6 +60,7 @@ export declare class ECS {
      * @returns Array of matching entities
      */
     findEntitiesByComponentValue<T extends EcsComponent>(componentClass: ComponentClass<T>, predicate: (component: T) => boolean): EcsEntity[];
+    onFrameEnd(callback: () => void): void;
     private destroyEntity;
     private checkE;
     private checkES;

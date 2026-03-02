@@ -20,6 +20,9 @@ export class ECS {
   private nextEntityID = 0;
   private entitiesToDestroy = new Array<EcsEntity>();
 
+  // Events
+  private frameEnd: (() => void) | undefined = undefined;
+
   // Cache
   private _results: EcsEntity[] = [];
   private _targetEntities: Set<number> | undefined;
@@ -107,21 +110,21 @@ export class ECS {
    */
   public async update(deltaTime: number = 0): Promise<void> {
     // Update all systems in priority order (ascending)
-    for (const system of this.systemOrder) {
-      this._targetEntities = this.systems.get(system);
+    for (let i = 0; i < this.systemOrder.length; i++) {
+      this._targetEntities = this.systems.get(this.systemOrder[i]);
       if (this._targetEntities === undefined) continue;
 
-      await system.update(this._targetEntities, deltaTime);
+      await this.systemOrder[i].update(this._targetEntities, deltaTime);
     }
 
-    // Remove any entities that were marked for deletion during the
-    // update.
-    while (this.entitiesToDestroy.length > 0) {
-      const entity = this.entitiesToDestroy.pop();
-      if (entity !== undefined) {
-        this.destroyEntity(entity);
-      }
+    // Remove any entities that were marked for deletion during the update.
+    for (let i = 0; i < this.entitiesToDestroy.length; i++) {
+      this.destroyEntity(this.entitiesToDestroy[i]);
     }
+    this.entitiesToDestroy = [];
+
+    // Call the frame end callback, if defined
+    this.frameEnd?.();
   }
 
   // API: Query helpers
@@ -193,6 +196,10 @@ export class ECS {
     return this._results;
   }
 
+  public onFrameEnd(callback: () => void) {
+    this.frameEnd = callback;
+  }
+
   // Private methods for doing internal state checks and mutations.
   private destroyEntity(entity: EcsEntity): void {
     this.entities.delete(entity);
@@ -208,14 +215,12 @@ export class ECS {
   }
 
   private checkES(entity: EcsEntity, system: EcsSystem): void {
-    let have = this.entities.get(entity);
-    let need = system.componentsRequired;
-    if (have?.hasAll(need)) {
+    if (this.entities.get(entity)?.hasAll(system.componentsRequired)) {
       // should be in system
-      this.systems.get(system)?.add(entity); // no-op if in
+      this.systems.get(system)!.add(entity); // no-op if in
     } else {
       // should not be in system
-      this.systems.get(system)?.delete(entity); // no-op if out
+      this.systems.get(system)!.delete(entity); // no-op if out
     }
   }
 }

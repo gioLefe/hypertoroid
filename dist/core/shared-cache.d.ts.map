@@ -1,0 +1,1 @@
+{"version":3,"file":"shared-cache.d.ts","sourceRoot":"","sources":["../../src/core/shared-cache.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,WAAW,CAAC,CAAC;IAC5B,IAAI,EAAE,CAAC,GAAG,IAAI,CAAC;IACf,KAAK,EAAE,OAAO,CAAC;IACf,UAAU,IAAI,IAAI,CAAC;CACpB;AAED,wBAAgB,iBAAiB,CAAC,CAAC,EAAE,IAAI,EAAE,CAAC,GAAG,WAAW,CAAC,CAAC,CAAC,CAQ5D"}

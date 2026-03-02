@@ -373,6 +373,244 @@ var AudioController = class {
 };
 __publicField(AudioController, "AUDIO_CONTROLLER_DI", "AudioController");
 
+// src/core/ecs/ecs-component.ts
+var EcsComponent = class {
+};
+var ComponentContainer = class {
+  constructor() {
+    __publicField(this, "map", /* @__PURE__ */ new Map());
+  }
+  add(component) {
+    this.map.set(component.constructor, component);
+  }
+  get(componentClass) {
+    return this.map.get(componentClass);
+  }
+  has(componentClass) {
+    return this.map.has(componentClass);
+  }
+  hasAll(componentClasses) {
+    for (let cls of componentClasses) {
+      if (!this.map.has(cls)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  delete(componentClass) {
+    this.map.delete(componentClass);
+  }
+};
+
+// src/core/ecs/ecs.ts
+var ECS = class {
+  constructor() {
+    // Main state
+    __publicField(this, "entities", /* @__PURE__ */ new Map());
+    __publicField(this, "systems", /* @__PURE__ */ new Map());
+    // Sorted array of systems by priority (ascending) for deterministic update order
+    __publicField(this, "systemOrder", []);
+    // Bookkeeping for entities.
+    __publicField(this, "nextEntityID", 0);
+    __publicField(this, "entitiesToDestroy", new Array());
+    // Events
+    __publicField(this, "frameEnd");
+    // Cache
+    __publicField(this, "_results", []);
+    __publicField(this, "_targetEntities");
+    __publicField(this, "_component");
+  }
+  // API: Entities
+  addEntity() {
+    let entity = this.nextEntityID;
+    this.nextEntityID++;
+    this.entities.set(entity, new ComponentContainer());
+    return entity;
+  }
+  /**
+   * Marks `entity` for removal. The actual removal happens at the end
+   * of the next `update()`. This way we avoid subtle bugs where an
+   * Entity is removed mid-`update()`, with some Systems seeing it and
+   * others not.
+   */
+  removeEntity(entity) {
+    this.entitiesToDestroy.push(entity);
+  }
+  // API: Components
+  addComponent(entity, component) {
+    this.entities.get(entity)?.add(component);
+    this.checkE(entity);
+  }
+  getComponents(entity) {
+    return this.entities.get(entity);
+  }
+  /**
+   * Get all entities in the ECS.
+   * Useful for systems that need to query entities not matching their componentsRequired.
+   */
+  getAllEntities() {
+    return this.entities;
+  }
+  removeComponent(entity, componentClass) {
+    this.entities.get(entity)?.delete(componentClass);
+    this.checkE(entity);
+  }
+  // API: Systems
+  addSystem(system) {
+    if (system.componentsRequired.size == 0) {
+      console.warn("System not added: empty Components list.", system);
+      return;
+    }
+    system.ecs = this;
+    this.systems.set(system, /* @__PURE__ */ new Set());
+    for (let entity of this.entities.keys()) {
+      this.checkES(entity, system);
+    }
+    this.systemOrder.push(system);
+    this.systemOrder.sort((a, b) => a.priority - b.priority);
+  }
+  removeSystem(system) {
+    this.systems.delete(system);
+    const index = this.systemOrder.indexOf(system);
+    if (index !== -1) {
+      this.systemOrder.splice(index, 1);
+    }
+  }
+  /**
+   * This is ordinarily called once per tick (e.g., every frame). It
+   * updates all Systems in priority order, then destroys any Entities
+   * that were marked for removal.
+   */
+  async update(deltaTime = 0) {
+    for (let i = 0; i < this.systemOrder.length; i++) {
+      this._targetEntities = this.systems.get(this.systemOrder[i]);
+      if (this._targetEntities === void 0) continue;
+      await this.systemOrder[i].update(this._targetEntities, deltaTime);
+    }
+    for (let i = 0; i < this.entitiesToDestroy.length; i++) {
+      this.destroyEntity(this.entitiesToDestroy[i]);
+    }
+    this.entitiesToDestroy = [];
+    this.frameEnd?.();
+  }
+  // API: Query helpers
+  /**
+   * Find all entities that have a specific component type.
+   *
+   * @param componentClass - The component class to search for
+   * @returns Array of entities that have the specified component
+   */
+  findEntitiesByComponent(componentClass) {
+    this._results = [];
+    for (const [entity, components] of this.entities) {
+      if (!components.has(componentClass)) continue;
+      this._results.push(entity);
+    }
+    return this._results;
+  }
+  /**
+   * Find the first entity that has a specific component matching a predicate.
+   *
+   * @param componentClass - The component class to search for
+   * @param predicate - Function to test each component
+   * @returns The first matching entity, or undefined if none found
+   */
+  findEntityByComponentValue(componentClass, predicate) {
+    for (const [entity, components] of this.entities) {
+      if (!components.has(componentClass)) continue;
+      this._component = components.get(componentClass);
+      if (!predicate(this._component)) continue;
+      return entity;
+    }
+    return void 0;
+  }
+  /**
+   * Find all entities that have a specific component matching a predicate.
+   *
+   * @param componentClass - The component class to search for
+   * @param predicate - Function to test each component
+   * @returns Array of matching entities
+   */
+  findEntitiesByComponentValue(componentClass, predicate) {
+    this._results = [];
+    for (const [entity, components] of this.entities) {
+      if (!components.has(componentClass)) continue;
+      this._component = components.get(componentClass);
+      if (!predicate(this._component)) continue;
+      this._results.push(entity);
+    }
+    return this._results;
+  }
+  onFrameEnd(callback) {
+    this.frameEnd = callback;
+  }
+  // Private methods for doing internal state checks and mutations.
+  destroyEntity(entity) {
+    this.entities.delete(entity);
+    for (let entities of this.systems.values()) {
+      entities.delete(entity);
+    }
+  }
+  checkE(entity) {
+    for (let system of this.systems.keys()) {
+      this.checkES(entity, system);
+    }
+  }
+  checkES(entity, system) {
+    if (this.entities.get(entity)?.hasAll(system.componentsRequired)) {
+      this.systems.get(system).add(entity);
+    } else {
+      this.systems.get(system).delete(entity);
+    }
+  }
+};
+__publicField(ECS, "INSTANCE_ID", "ECS");
+
+// src/core/ecs/ecs-system.ts
+var EcsSystem = class {
+  constructor() {
+    /**
+     * Priority determines the order in which systems are updated.
+     * Lower values run first. Default is 0.
+     *
+     * Recommended ranges:
+     * - 0-49: Pre-processing systems (e.g., FloorPrerenderSystem)
+     * - 50-99: Logic systems (e.g., ZOrderSystem)
+     * - 100+: Rendering systems (e.g., RenderSystem)
+     */
+    __publicField(this, "priority", 0);
+    /**
+     * The ECS is given to all Systems. Systems contain most of the game
+     * code, so they need to be able to create, mutate, and destroy
+     * Entities and Components.
+     */
+    __publicField(this, "ecs");
+  }
+};
+
+// src/core/ecs/components/hitbox-component.ts
+var HitboxComponent = class extends EcsComponent {
+  constructor(id, priority, callbacks, data, boundingBox, hitTest, color, image) {
+    super();
+    this.id = id;
+    this.priority = priority;
+    this.callbacks = callbacks;
+    this.data = data;
+    this.boundingBox = boundingBox;
+    this.hitTest = hitTest;
+    this.color = color;
+    this.image = image;
+  }
+};
+
+// src/core/ecs/components/keyboard-focus-tag-component.ts
+var KeyboardFocusTagComponent = class extends EcsComponent {
+};
+
+// src/core/ecs/components/canvas-hitbox-tag-component.ts
+var CanvasHitboxTagComponent = class extends EcsComponent {
+};
+
 // src/helpers/canvas.ts
 function drawRotated(ctx, canvasW, canvasH, img, degrees) {
   ctx.clearRect(0, 0, canvasW, canvasH);
@@ -798,14 +1036,23 @@ function isSameColor(color, colorToCompare) {
 function colorToString(color) {
   return `rgba(${color.r},${color.g},${color.b},${color.a})`;
 }
-var pixelColorCache = { r: 0, g: 0, b: 0, a: 0 };
 function getCtxPixelColor(x, y, ctx) {
   const data = ctx.getImageData(x, y, 1, 1).data;
+  let pixelColorCache = { r: 0, g: 0, b: 0, a: 0 };
   pixelColorCache.r = data[0];
   pixelColorCache.g = data[1];
   pixelColorCache.b = data[2];
   pixelColorCache.a = data[3];
   return pixelColorCache;
+}
+function getImageBufferColorAt(x, y, width, data) {
+  const offset = x * 4 + y * width * 4;
+  return {
+    r: data[offset],
+    g: data[offset + 1],
+    b: data[offset + 2],
+    a: data[offset + 3]
+  };
 }
 
 // src/models/game-object.ts
@@ -982,242 +1229,6 @@ function pivotComparator(p1, p2) {
   return p1.position.x === p2.position.x && p1.position.y === p2.position.y && p1.direction === p2.direction;
 }
 
-// src/core/ecs/ecs-component.ts
-var EcsComponent = class {
-};
-var ComponentContainer = class {
-  constructor() {
-    __publicField(this, "map", /* @__PURE__ */ new Map());
-  }
-  add(component) {
-    this.map.set(component.constructor, component);
-  }
-  get(componentClass) {
-    return this.map.get(componentClass);
-  }
-  has(componentClass) {
-    return this.map.has(componentClass);
-  }
-  hasAll(componentClasses) {
-    for (let cls of componentClasses) {
-      if (!this.map.has(cls)) {
-        return false;
-      }
-    }
-    return true;
-  }
-  delete(componentClass) {
-    this.map.delete(componentClass);
-  }
-};
-
-// src/core/ecs/ecs.ts
-var ECS = class {
-  constructor() {
-    // Main state
-    __publicField(this, "entities", /* @__PURE__ */ new Map());
-    __publicField(this, "systems", /* @__PURE__ */ new Map());
-    // Sorted array of systems by priority (ascending) for deterministic update order
-    __publicField(this, "systemOrder", []);
-    // Bookkeeping for entities.
-    __publicField(this, "nextEntityID", 0);
-    __publicField(this, "entitiesToDestroy", new Array());
-    // Cache
-    __publicField(this, "_results", []);
-    __publicField(this, "_targetEntities");
-    __publicField(this, "_component");
-  }
-  // API: Entities
-  addEntity() {
-    let entity = this.nextEntityID;
-    this.nextEntityID++;
-    this.entities.set(entity, new ComponentContainer());
-    return entity;
-  }
-  /**
-   * Marks `entity` for removal. The actual removal happens at the end
-   * of the next `update()`. This way we avoid subtle bugs where an
-   * Entity is removed mid-`update()`, with some Systems seeing it and
-   * others not.
-   */
-  removeEntity(entity) {
-    this.entitiesToDestroy.push(entity);
-  }
-  // API: Components
-  addComponent(entity, component) {
-    this.entities.get(entity)?.add(component);
-    this.checkE(entity);
-  }
-  getComponents(entity) {
-    return this.entities.get(entity);
-  }
-  /**
-   * Get all entities in the ECS.
-   * Useful for systems that need to query entities not matching their componentsRequired.
-   */
-  getAllEntities() {
-    return this.entities;
-  }
-  removeComponent(entity, componentClass) {
-    this.entities.get(entity)?.delete(componentClass);
-    this.checkE(entity);
-  }
-  // API: Systems
-  addSystem(system) {
-    if (system.componentsRequired.size == 0) {
-      console.warn("System not added: empty Components list.", system);
-      return;
-    }
-    system.ecs = this;
-    this.systems.set(system, /* @__PURE__ */ new Set());
-    for (let entity of this.entities.keys()) {
-      this.checkES(entity, system);
-    }
-    this.systemOrder.push(system);
-    this.systemOrder.sort((a, b) => a.priority - b.priority);
-  }
-  removeSystem(system) {
-    this.systems.delete(system);
-    const index = this.systemOrder.indexOf(system);
-    if (index !== -1) {
-      this.systemOrder.splice(index, 1);
-    }
-  }
-  /**
-   * This is ordinarily called once per tick (e.g., every frame). It
-   * updates all Systems in priority order, then destroys any Entities
-   * that were marked for removal.
-   */
-  async update(deltaTime = 0) {
-    for (const system of this.systemOrder) {
-      this._targetEntities = this.systems.get(system);
-      if (this._targetEntities === void 0) continue;
-      await system.update(this._targetEntities, deltaTime);
-    }
-    while (this.entitiesToDestroy.length > 0) {
-      const entity = this.entitiesToDestroy.pop();
-      if (entity !== void 0) {
-        this.destroyEntity(entity);
-      }
-    }
-  }
-  // API: Query helpers
-  /**
-   * Find all entities that have a specific component type.
-   *
-   * @param componentClass - The component class to search for
-   * @returns Array of entities that have the specified component
-   */
-  findEntitiesByComponent(componentClass) {
-    this._results = [];
-    for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) continue;
-      this._results.push(entity);
-    }
-    return this._results;
-  }
-  /**
-   * Find the first entity that has a specific component matching a predicate.
-   *
-   * @param componentClass - The component class to search for
-   * @param predicate - Function to test each component
-   * @returns The first matching entity, or undefined if none found
-   */
-  findEntityByComponentValue(componentClass, predicate) {
-    for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) continue;
-      this._component = components.get(componentClass);
-      if (!predicate(this._component)) continue;
-      return entity;
-    }
-    return void 0;
-  }
-  /**
-   * Find all entities that have a specific component matching a predicate.
-   *
-   * @param componentClass - The component class to search for
-   * @param predicate - Function to test each component
-   * @returns Array of matching entities
-   */
-  findEntitiesByComponentValue(componentClass, predicate) {
-    this._results = [];
-    for (const [entity, components] of this.entities) {
-      if (!components.has(componentClass)) continue;
-      this._component = components.get(componentClass);
-      if (!predicate(this._component)) continue;
-      this._results.push(entity);
-    }
-    return this._results;
-  }
-  // Private methods for doing internal state checks and mutations.
-  destroyEntity(entity) {
-    this.entities.delete(entity);
-    for (let entities of this.systems.values()) {
-      entities.delete(entity);
-    }
-  }
-  checkE(entity) {
-    for (let system of this.systems.keys()) {
-      this.checkES(entity, system);
-    }
-  }
-  checkES(entity, system) {
-    let have = this.entities.get(entity);
-    let need = system.componentsRequired;
-    if (have?.hasAll(need)) {
-      this.systems.get(system)?.add(entity);
-    } else {
-      this.systems.get(system)?.delete(entity);
-    }
-  }
-};
-__publicField(ECS, "INSTANCE_ID", "ECS");
-
-// src/core/ecs/ecs-system.ts
-var EcsSystem = class {
-  constructor() {
-    /**
-     * Priority determines the order in which systems are updated.
-     * Lower values run first. Default is 0.
-     *
-     * Recommended ranges:
-     * - 0-49: Pre-processing systems (e.g., FloorPrerenderSystem)
-     * - 50-99: Logic systems (e.g., ZOrderSystem)
-     * - 100+: Rendering systems (e.g., RenderSystem)
-     */
-    __publicField(this, "priority", 0);
-    /**
-     * The ECS is given to all Systems. Systems contain most of the game
-     * code, so they need to be able to create, mutate, and destroy
-     * Entities and Components.
-     */
-    __publicField(this, "ecs");
-  }
-};
-
-// src/core/ecs/components/hitbox-component.ts
-var HitboxComponent = class extends EcsComponent {
-  constructor(id, priority, callbacks, data, boundingBox, hitTest, color, image) {
-    super();
-    this.id = id;
-    this.priority = priority;
-    this.callbacks = callbacks;
-    this.data = data;
-    this.boundingBox = boundingBox;
-    this.hitTest = hitTest;
-    this.color = color;
-    this.image = image;
-  }
-};
-
-// src/core/ecs/components/keyboard-focus-tag-component.ts
-var KeyboardFocusTagComponent = class extends EcsComponent {
-};
-
-// src/core/ecs/components/canvas-hitbox-tag-component.ts
-var CanvasHitboxTagComponent = class extends EcsComponent {
-};
-
 // src/core/ecs/components/mouse-down-tag-component.ts
 var MouseDownTagComponent = class extends EcsComponent {
 };
@@ -1226,20 +1237,20 @@ var MouseDownTagComponent = class extends EcsComponent {
 var InteractionManager = class {
   constructor(canvas, ecs) {
     this.ecs = ecs;
+    __publicField(this, "colorHeap", new ColorHeap());
+    __publicField(this, "hitBoxCanvas");
+    __publicField(this, "hitBoxOffscreenCtx");
     __publicField(this, "canvas");
     __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
     __publicField(this, "mouseMoveTargetId", null);
     __publicField(this, "mouseOutCallback", null);
     __publicField(this, "mouseDownTargetId", null);
     __publicField(this, "mouseUpCallback", null);
-    __publicField(this, "_point", { x: 0, y: 0 });
-    __publicField(this, "colorHeap", new ColorHeap());
-    __publicField(this, "hitBoxCanvas");
-    __publicField(this, "hitBoxOffscreenCtx");
     // Cached vars
     __publicField(this, "_entities", []);
     __publicField(this, "_hitBoxComponent");
     __publicField(this, "_components");
+    __publicField(this, "_point", { x: 0, y: 0 });
     __publicField(this, "listener", (htmlEv) => {
       const evType = htmlEv.type;
       if (evType.indexOf("key") === 0) {
@@ -1249,10 +1260,10 @@ var InteractionManager = class {
         if (this._entities.length) {
           this._components = this.ecs.getComponents(this._entities[0]);
           const focusedHitbox = this._components?.get(HitboxComponent);
-          const callback2 = focusedHitbox?.callbacks?.[evType];
-          if (callback2) {
+          const callback = focusedHitbox?.callbacks?.[evType];
+          if (callback) {
             console.log(`callback ${evType}`, focusedHitbox.id);
-            callback2(htmlEv);
+            callback(htmlEv);
           }
           return;
         }
@@ -1263,15 +1274,9 @@ var InteractionManager = class {
       }
       this.extractPoint(htmlEv, this._point);
       if (!this._point) return;
-      this._hitBoxComponent = this.getHitboxAt(this._point);
-      if (!this._hitBoxComponent) {
-        this._hitBoxComponent = this.getCanvasHitbox(evType);
-      }
+      this._hitBoxComponent = this.getHitboxAt(this._point) ?? this.getCanvasHitbox(evType);
       if (!this._hitBoxComponent) return;
-      const callback = this._hitBoxComponent.callbacks?.[evType];
-      if (callback) {
-        callback(htmlEv);
-      }
+      this._hitBoxComponent.callbacks?.[evType]?.(htmlEv);
       this.handleMouseButtonRelease(htmlEv, evType, this._hitBoxComponent);
       this.handleMouseMove(htmlEv, evType, this._hitBoxComponent);
     });
@@ -1369,11 +1374,16 @@ var InteractionManager = class {
   getHitboxAt(point) {
     let highestLayer = -Infinity;
     let hb;
+    const pointColor = getCtxPixelColor(
+      point.x,
+      point.y,
+      this.hitBoxOffscreenCtx
+    );
     this._entities = this.ecs.findEntitiesByComponent(HitboxComponent);
     for (let i = 0; i < this._entities.length; i++) {
       this._components = this.ecs.getComponents(this._entities[i]);
       hb = this._components?.get(HitboxComponent);
-      if (this.hitTest(hb, point)) {
+      if (this.hitTest(hb, point, pointColor)) {
         const layer = hb.priority ?? 0;
         if (layer > highestLayer) {
           highestLayer = layer;
@@ -1383,20 +1393,13 @@ var InteractionManager = class {
     }
     return void 0;
   }
-  hitTest(hitboxComponent, point) {
-    if (!this.hitBoxOffscreenCtx) return false;
-    if (!hitboxComponent.boundingBox || !isPointInAlignedBBox(point, hitboxComponent.boundingBox)) {
+  hitTest(hitboxComponent, point, offsetXYColor) {
+    if (!hitboxComponent.boundingBox || !isPointInAlignedBBox(point, hitboxComponent.boundingBox))
       return false;
-    }
-    if (hitboxComponent.hitTest) {
+    if (hitboxComponent.hitTest)
       return hitboxComponent.hitTest(point, this.hitBoxOffscreenCtx);
-    }
-    if (hitboxComponent.color) {
-      return isSameColor(
-        getCtxPixelColor(point.x, point.y, this.hitBoxOffscreenCtx),
-        hitboxComponent.color
-      );
-    }
+    if (hitboxComponent.color)
+      return isSameColor(offsetXYColor, hitboxComponent.color);
     return hitboxComponent.boundingBox !== void 0;
   }
   getCanvasHitbox(_evType) {
@@ -1405,12 +1408,53 @@ var InteractionManager = class {
       console.error("cannot find Canvas Hitbox tag componet");
       return;
     }
-    const hb = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
-    if (!hb) return void 0;
-    return hb;
+    return this.ecs.getComponents(entity[0])?.get(HitboxComponent);
   }
 };
 __publicField(InteractionManager, "INSTANCE_ID", "InteractionManager");
+
+// src/core/request.ts
+async function asyncReq(path, assetType) {
+  return new Promise((resolve, reject) => {
+    let responseType = "";
+    switch (assetType) {
+      case "AUDIO":
+        responseType = "arraybuffer";
+        break;
+      case "JSON":
+        responseType = "json";
+        break;
+    }
+    switch (assetType) {
+      case "TEXT":
+      case "JSON":
+      case "AUDIO":
+        const request = new XMLHttpRequest();
+        request.open("GET", path, true);
+        request.responseType = responseType;
+        request.onload = function() {
+          return resolve(request.response);
+        };
+        request.onerror = function() {
+          reject(`cannot load ${path} at ${path}`);
+        };
+        request.send();
+        break;
+      case "IMAGE":
+        let obj = new Image();
+        obj.onload = function() {
+          return resolve(obj);
+        };
+        obj.onerror = function() {
+          reject(`cannot load ${path} at ${path}`);
+        };
+        obj.src = path;
+        break;
+      default:
+        reject(`unsupported asset type ${assetType}`);
+    }
+  });
+}
 
 // src/core/scene-manager.ts
 var SceneManager = class {
@@ -1482,47 +1526,15 @@ var SceneManager = class {
   }
 };
 
-// src/core/request.ts
-async function asyncReq(path, assetType) {
-  return new Promise((resolve, reject) => {
-    let responseType = "";
-    switch (assetType) {
-      case "AUDIO":
-        responseType = "arraybuffer";
-        break;
-      case "JSON":
-        responseType = "json";
-        break;
+// src/core/shared-cache.ts
+function createSharedCache(data) {
+  return {
+    data,
+    dirty: true,
+    invalidate() {
+      this.dirty = true;
     }
-    switch (assetType) {
-      case "TEXT":
-      case "JSON":
-      case "AUDIO":
-        const request = new XMLHttpRequest();
-        request.open("GET", path, true);
-        request.responseType = responseType;
-        request.onload = function() {
-          return resolve(request.response);
-        };
-        request.onerror = function() {
-          reject(`cannot load ${path} at ${path}`);
-        };
-        request.send();
-        break;
-      case "IMAGE":
-        let obj = new Image();
-        obj.onload = function() {
-          return resolve(obj);
-        };
-        obj.onerror = function() {
-          reject(`cannot load ${path} at ${path}`);
-        };
-        obj.src = path;
-        break;
-      default:
-        reject(`unsupported asset type ${assetType}`);
-    }
-  });
+  };
 }
 
 // src/mixins/with-dragging.ts
@@ -2017,6 +2029,7 @@ export {
   colorToString,
   createBoundingBox,
   createPolygon,
+  createSharedCache,
   createSquare,
   createTriangle,
   createVector,
@@ -2026,6 +2039,7 @@ export {
   drawRotated,
   getBBoxRect,
   getCtxPixelColor,
+  getImageBufferColorAt,
   getTextBBox,
   getVectorPerpendicular,
   getWorldPolygon,
