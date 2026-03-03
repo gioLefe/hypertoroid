@@ -456,12 +456,13 @@ var ECS = class {
     this.checkE(entity);
   }
   // API: Systems
-  addSystem(system) {
+  addSystem(system, priority) {
     if (system.componentsRequired.size == 0) {
       console.warn("System not added: empty Components list.", system);
       return;
     }
     system.ecs = this;
+    if (priority) system.priority = priority;
     this.systems.set(system, /* @__PURE__ */ new Set());
     for (let entity of this.entities.keys()) {
       this.checkES(entity, system);
@@ -959,6 +960,271 @@ function throttle(func, limit) {
   };
 }
 
+// src/core/interaction-manager.ts
+var InteractionManager = class {
+  constructor(canvas, ecs) {
+    this.ecs = ecs;
+    __publicField(this, "colorHeap", new ColorHeap());
+    __publicField(this, "hitBoxCanvas");
+    __publicField(this, "hitBoxOffscreenCtx");
+    __publicField(this, "canvas");
+    __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
+    // private mouseMoveTargetId: EcsEntity | null = null;
+    // private mouseOutCallback: Callback<"mouseout"> | null = null;
+    // private mouseDownTargetId: EcsEntity | null = null;
+    // private mouseUpCallback: Callback<"mouseup"> | null = null;
+    // Cached vars
+    __publicField(this, "_entities", []);
+    __publicField(this, "_components");
+    __publicField(this, "listener", (htmlEv) => {
+      const evType = htmlEv.type;
+      if (evType.indexOf("key") === 0) {
+        this._entities = this.ecs.findEntitiesByComponent(
+          KeyboardFocusTagComponent
+        );
+        if (this._entities.length) {
+          this._components = this.ecs.getComponents(this._entities[0]);
+          const focusedHitbox = this._components?.get(HitboxComponent);
+          const callback = focusedHitbox?.callbacks?.[evType];
+          if (callback) {
+            console.log(`callback ${evType}`, focusedHitbox.id);
+            callback(htmlEv);
+          }
+          return;
+        }
+        const canvasHitBox = this.getCanvasHitbox(evType);
+        if (canvasHitBox) {
+          canvasHitBox.callbacks?.[evType]?.(htmlEv);
+        }
+      }
+    });
+    this.canvas = canvas;
+    this.hitBoxCanvas = new OffscreenCanvas(
+      this.canvas.width,
+      this.canvas.height
+    );
+    this.hitBoxOffscreenCtx = this.hitBoxCanvas?.getContext("2d", {
+      willReadFrequently: true
+    });
+  }
+  registerEventListener(evType, options) {
+    this.canvas.addEventListener(evType, this.listener, options);
+  }
+  registerKeyboardFocus(entity) {
+    const entities = this.ecs.findEntitiesByComponent(
+      KeyboardFocusTagComponent
+    );
+    if (entities.length) {
+      this.ecs.removeComponent(entities[0], KeyboardFocusTagComponent);
+    }
+    this.ecs.addComponent(entity, new KeyboardFocusTagComponent());
+  }
+  updateCanvasSize(width, height) {
+    if (!this.hitBoxCanvas) return;
+    this.hitBoxCanvas.width = width;
+    this.hitBoxCanvas.height = height;
+  }
+  clean(evTypes) {
+    for (const evType of evTypes) {
+      this.canvas.removeEventListener(evType, this.listener);
+    }
+    this.colorizedCache.clear();
+  }
+  getCanvasHitbox(_evType) {
+    const entity = this.ecs.findEntitiesByComponent(CanvasHitboxTagComponent);
+    if (!entity) {
+      console.error("cannot find Canvas Hitbox tag componet");
+      return;
+    }
+    return this.ecs.getComponents(entity[0])?.get(HitboxComponent);
+  }
+  /** Handle mouse button release across different hitboxes.
+   * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
+   * the original hitbox's mouseup callback is still invoked.
+   */
+  // private handleMouseButtonRelease = (
+  //   htmlEv: HTMLElementEventMap[keyof HTMLElementEventMap],
+  //   evType: HTMLEventType,
+  //   hitboxComponent: HitboxComponent,
+  // ): void => {
+  //   if (evType === "mousedown" && this.mouseUpCallback === null) {
+  //     this.mouseUpCallback = hitboxComponent.callbacks?.["mouseup"] || null;
+  //     this.mouseDownTargetId = hitboxComponent.id || null;
+  //   }
+  //   if (evType === "mouseup" && this.mouseUpCallback) {
+  //     if (this.mouseDownTargetId !== hitboxComponent.id) {
+  //       this.mouseUpCallback(htmlEv as HTMLElementEventMap["mouseup"]);
+  //       this.mouseUpCallback = null;
+  //     }
+  //     this.mouseDownTargetId = null;
+  //   }
+  // };
+  /** Handle mouse hover, dragging and mouseout across different hitboxes.
+   * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
+   * the original hitbox's mouseup callback is still invoked.
+   */
+  // private handleMouseMove = (
+  //   htmlEv: HTMLElementEventMap[keyof HTMLElementEventMap],
+  //   evType: HTMLEventType,
+  //   hitboxComponent: HitboxComponent,
+  // ): void => {
+  //   if (evType !== "mousemove") {
+  //     return;
+  //   }
+  //   // handle the case where the mouse was previously over another hitbox and mousedown is also set (means a drag could be happening)
+  //   if (
+  //     this.mouseDownTargetId &&
+  //     this.mouseDownTargetId !== hitboxComponent.id
+  //   ) {
+  //     const entity = this.ecs.findEntitiesByComponent(MouseDownTagComponent);
+  //     const hitbox = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
+  //     const originalHitbox = hitbox;
+  //     // if dragging, invoke the mousemove callback of the original hitbox
+  //     const mouseMoveCallback = originalHitbox?.callbacks?.["mousemove"];
+  //     if (mouseMoveCallback && originalHitbox.data?.isDragging) {
+  //       mouseMoveCallback(htmlEv as HTMLElementEventMap["mousemove"]);
+  //       return;
+  //     }
+  //   }
+  //   if (evType === "mousemove" && this.mouseOutCallback === null) {
+  //     this.mouseOutCallback = hitboxComponent.callbacks?.["mouseout"] || null;
+  //     this.mouseMoveTargetId = hitboxComponent.id || null;
+  //   }
+  //   if (evType === "mousemove" && this.mouseOutCallback) {
+  //     if (this.mouseMoveTargetId !== hitboxComponent.id) {
+  //       this.mouseOutCallback(htmlEv as HTMLElementEventMap["mouseout"]);
+  //       this.mouseMoveTargetId = null;
+  //       this.mouseOutCallback = null;
+  //     }
+  //   }
+  // };
+};
+__publicField(InteractionManager, "INSTANCE_ID", "InteractionManager");
+
+// src/core/request.ts
+async function asyncReq(path, assetType) {
+  return new Promise((resolve, reject) => {
+    let responseType = "";
+    switch (assetType) {
+      case "AUDIO":
+        responseType = "arraybuffer";
+        break;
+      case "JSON":
+        responseType = "json";
+        break;
+    }
+    switch (assetType) {
+      case "TEXT":
+      case "JSON":
+      case "AUDIO":
+        const request = new XMLHttpRequest();
+        request.open("GET", path, true);
+        request.responseType = responseType;
+        request.onload = function() {
+          return resolve(request.response);
+        };
+        request.onerror = function() {
+          reject(`cannot load ${path} at ${path}`);
+        };
+        request.send();
+        break;
+      case "IMAGE":
+        let obj = new Image();
+        obj.onload = function() {
+          return resolve(obj);
+        };
+        obj.onerror = function() {
+          reject(`cannot load ${path} at ${path}`);
+        };
+        obj.src = path;
+        break;
+      default:
+        reject(`unsupported asset type ${assetType}`);
+    }
+  });
+}
+
+// src/core/scene-manager.ts
+var SceneManager = class {
+  constructor() {
+    __publicField(this, "currentScenes", []);
+    __publicField(this, "scenes", []);
+    __publicField(this, "_newSceneInitPromises");
+  }
+  addScene(scene) {
+    if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
+      console.warn("Scene with same id already exists, provide a new id");
+      return;
+    }
+    this.scenes.push(scene);
+  }
+  deleteScene(id) {
+    const i = this.getSceneIndex(id, this.currentScenes);
+    this.currentScenes[i].clean();
+    this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
+  }
+  getCurrentScenes() {
+    return this.currentScenes;
+  }
+  /**
+   * Changes the current scene to a new scene specified by the given ID.
+   *
+   * This function initializes the new scene, optionally initializes a loading scene, and updates
+   * the current scenes stack. It also handles cleaning up the previous scene state if specified.
+   *
+   * @param {string} id - The ID of the new scene to transition to.
+   * @param {boolean} [cleanPreviousState=true] - A flag indicating whether to clean up the previous scene state.
+   * @param {string} [loadingSceneId] - The ID of an optional loading scene to display while the new scene is initializing.
+   * @returns {Promise<void>} A promise that resolves when the scene transition is complete.
+   */
+  async changeScene(id, cleanPreviousState = true, loadingSceneId) {
+    const lastCurrentSceneId = this.currentScenes[this.currentScenes.length - 1]?.id;
+    const newScene = this.scenes[this.getSceneIndex(id, this.scenes)];
+    if (loadingSceneId !== void 0) {
+      const loadingSceneIndex = this.getSceneIndex(loadingSceneId, this.scenes);
+      let loadingScene = this.scenes[loadingSceneIndex];
+      const loadingSceneInitPromises = loadingScene.init();
+      if (loadingSceneInitPromises !== void 0) {
+        await loadingSceneInitPromises;
+      }
+      this.currentScenes.push(loadingScene);
+    }
+    try {
+      this._newSceneInitPromises = await newScene.init();
+    } catch (err) {
+      console.error(err);
+    }
+    if (this._newSceneInitPromises !== void 0) {
+      await this._newSceneInitPromises;
+    }
+    if (cleanPreviousState && lastCurrentSceneId !== void 0) {
+      this.deleteScene(lastCurrentSceneId);
+    }
+    if (loadingSceneId !== void 0) {
+      this.deleteScene(loadingSceneId);
+    }
+    this.currentScenes.push(newScene);
+  }
+  getSceneIndex(id, scenes) {
+    const loadingSceneIndex = scenes.findIndex((s) => s.id === id);
+    if (loadingSceneIndex === -1) {
+      throw new Error(`cannot find scene with id ${id}`);
+    }
+    return loadingSceneIndex;
+  }
+};
+
+// src/core/shared-cache.ts
+function createSharedCache(data) {
+  return {
+    data,
+    dirty: true,
+    invalidate() {
+      this.dirty = true;
+    }
+  };
+}
+
 // src/models/base-object.ts
 var BaseObject = class {
   constructor() {
@@ -1030,6 +1296,12 @@ var RED = { r: 255, g: 0, b: 0, a: 255 };
 var GREEN = { r: 0, g: 255, b: 0, a: 255 };
 var BLUE = { r: 0, g: 0, b: 255, a: 255 };
 var YELLOW = { r: 255, g: 255, b: 0, a: 255 };
+var CORNER_TILE_COLORS = {
+  RED,
+  GREEN,
+  BLUE,
+  YELLOW
+};
 function isSameColor(color, colorToCompare) {
   return color.r === colorToCompare.r && color.g === colorToCompare.g && color.b === colorToCompare.b && color.a === colorToCompare.a;
 }
@@ -1227,314 +1499,6 @@ var QuadTree = class _QuadTree {
 // src/models/unit-vector.ts
 function pivotComparator(p1, p2) {
   return p1.position.x === p2.position.x && p1.position.y === p2.position.y && p1.direction === p2.direction;
-}
-
-// src/core/ecs/components/mouse-down-tag-component.ts
-var MouseDownTagComponent = class extends EcsComponent {
-};
-
-// src/core/interaction-manager.ts
-var InteractionManager = class {
-  constructor(canvas, ecs) {
-    this.ecs = ecs;
-    __publicField(this, "colorHeap", new ColorHeap());
-    __publicField(this, "hitBoxCanvas");
-    __publicField(this, "hitBoxOffscreenCtx");
-    __publicField(this, "canvas");
-    __publicField(this, "colorizedCache", /* @__PURE__ */ new Map());
-    __publicField(this, "mouseMoveTargetId", null);
-    __publicField(this, "mouseOutCallback", null);
-    __publicField(this, "mouseDownTargetId", null);
-    __publicField(this, "mouseUpCallback", null);
-    // Cached vars
-    __publicField(this, "_entities", []);
-    __publicField(this, "_hitBoxComponent");
-    __publicField(this, "_components");
-    __publicField(this, "_point", { x: 0, y: 0 });
-    __publicField(this, "listener", (htmlEv) => {
-      const evType = htmlEv.type;
-      if (evType.indexOf("key") === 0) {
-        this._entities = this.ecs.findEntitiesByComponent(
-          KeyboardFocusTagComponent
-        );
-        if (this._entities.length) {
-          this._components = this.ecs.getComponents(this._entities[0]);
-          const focusedHitbox = this._components?.get(HitboxComponent);
-          const callback = focusedHitbox?.callbacks?.[evType];
-          if (callback) {
-            console.log(`callback ${evType}`, focusedHitbox.id);
-            callback(htmlEv);
-          }
-          return;
-        }
-        const canvasHitBox = this.getCanvasHitbox(evType);
-        if (canvasHitBox) {
-          canvasHitBox.callbacks?.[evType]?.(htmlEv);
-        }
-      }
-      this.extractPoint(htmlEv, this._point);
-      if (!this._point) return;
-      this._hitBoxComponent = this.getHitboxAt(this._point) ?? this.getCanvasHitbox(evType);
-      if (!this._hitBoxComponent) return;
-      this._hitBoxComponent.callbacks?.[evType]?.(htmlEv);
-      this.handleMouseButtonRelease(htmlEv, evType, this._hitBoxComponent);
-      this.handleMouseMove(htmlEv, evType, this._hitBoxComponent);
-    });
-    /** Handle mouse button release across different hitboxes.
-     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
-     * the original hitbox's mouseup callback is still invoked.
-     */
-    __publicField(this, "handleMouseButtonRelease", (htmlEv, evType, hitboxComponent) => {
-      if (evType === "mousedown" && this.mouseUpCallback === null) {
-        this.mouseUpCallback = hitboxComponent.callbacks?.["mouseup"] || null;
-        this.mouseDownTargetId = hitboxComponent.id || null;
-      }
-      if (evType === "mouseup" && this.mouseUpCallback) {
-        if (this.mouseDownTargetId !== hitboxComponent.id) {
-          this.mouseUpCallback(htmlEv);
-          this.mouseUpCallback = null;
-        }
-        this.mouseDownTargetId = null;
-      }
-    });
-    /** Handle mouse hover, dragging and mouseout across different hitboxes.
-     * Ensures that if a mousedown occurs on one hitbox and mouseup on another,
-     * the original hitbox's mouseup callback is still invoked.
-     */
-    __publicField(this, "handleMouseMove", (htmlEv, evType, hitboxComponent) => {
-      if (evType !== "mousemove") {
-        return;
-      }
-      if (this.mouseDownTargetId && this.mouseDownTargetId !== hitboxComponent.id) {
-        const entity = this.ecs.findEntitiesByComponent(MouseDownTagComponent);
-        const hitbox = this.ecs.getComponents(entity[0])?.get(HitboxComponent);
-        const originalHitbox = hitbox;
-        const mouseMoveCallback = originalHitbox?.callbacks?.["mousemove"];
-        if (mouseMoveCallback && originalHitbox.data?.isDragging) {
-          mouseMoveCallback(htmlEv);
-          return;
-        }
-      }
-      if (evType === "mousemove" && this.mouseOutCallback === null) {
-        this.mouseOutCallback = hitboxComponent.callbacks?.["mouseout"] || null;
-        this.mouseMoveTargetId = hitboxComponent.id || null;
-      }
-      if (evType === "mousemove" && this.mouseOutCallback) {
-        if (this.mouseMoveTargetId !== hitboxComponent.id) {
-          this.mouseOutCallback(htmlEv);
-          this.mouseMoveTargetId = null;
-          this.mouseOutCallback = null;
-        }
-      }
-    });
-    this.canvas = canvas;
-    this.hitBoxCanvas = new OffscreenCanvas(
-      this.canvas.width,
-      this.canvas.height
-    );
-    this.hitBoxOffscreenCtx = this.hitBoxCanvas?.getContext("2d", {
-      willReadFrequently: true
-    });
-  }
-  registerEventListener(evType, options) {
-    this.canvas.addEventListener(evType, this.listener, options);
-  }
-  registerKeyboardFocus(entity) {
-    const entities = this.ecs.findEntitiesByComponent(
-      KeyboardFocusTagComponent
-    );
-    if (entities.length) {
-      this.ecs.removeComponent(entities[0], KeyboardFocusTagComponent);
-    }
-    this.ecs.addComponent(entity, new KeyboardFocusTagComponent());
-  }
-  updateCanvasSize(width, height) {
-    if (!this.hitBoxCanvas) return;
-    this.hitBoxCanvas.width = width;
-    this.hitBoxCanvas.height = height;
-  }
-  clean(evTypes) {
-    for (const evType of evTypes) {
-      this.canvas.removeEventListener(evType, this.listener);
-    }
-    this.colorizedCache.clear();
-  }
-  extractPoint(ev, out) {
-    const point = out ?? { x: 0, y: 0 };
-    if ("offsetX" in ev && "offsetY" in ev) {
-      point.x = ev.offsetX;
-      point.y = ev.offsetY;
-    }
-    return point;
-  }
-  /**
-   * Query the highest-priority hitbox at a point.
-   * Returns undefined if no hitbox matches.
-   */
-  getHitboxAt(point) {
-    let highestLayer = -Infinity;
-    let hb;
-    const pointColor = getCtxPixelColor(
-      point.x,
-      point.y,
-      this.hitBoxOffscreenCtx
-    );
-    this._entities = this.ecs.findEntitiesByComponent(HitboxComponent);
-    for (let i = 0; i < this._entities.length; i++) {
-      this._components = this.ecs.getComponents(this._entities[i]);
-      hb = this._components?.get(HitboxComponent);
-      if (this.hitTest(hb, point, pointColor)) {
-        const layer = hb.priority ?? 0;
-        if (layer > highestLayer) {
-          highestLayer = layer;
-          return hb;
-        }
-      }
-    }
-    return void 0;
-  }
-  hitTest(hitboxComponent, point, offsetXYColor) {
-    if (!hitboxComponent.boundingBox || !isPointInAlignedBBox(point, hitboxComponent.boundingBox))
-      return false;
-    if (hitboxComponent.hitTest)
-      return hitboxComponent.hitTest(point, this.hitBoxOffscreenCtx);
-    if (hitboxComponent.color)
-      return isSameColor(offsetXYColor, hitboxComponent.color);
-    return hitboxComponent.boundingBox !== void 0;
-  }
-  getCanvasHitbox(_evType) {
-    const entity = this.ecs.findEntitiesByComponent(CanvasHitboxTagComponent);
-    if (!entity) {
-      console.error("cannot find Canvas Hitbox tag componet");
-      return;
-    }
-    return this.ecs.getComponents(entity[0])?.get(HitboxComponent);
-  }
-};
-__publicField(InteractionManager, "INSTANCE_ID", "InteractionManager");
-
-// src/core/request.ts
-async function asyncReq(path, assetType) {
-  return new Promise((resolve, reject) => {
-    let responseType = "";
-    switch (assetType) {
-      case "AUDIO":
-        responseType = "arraybuffer";
-        break;
-      case "JSON":
-        responseType = "json";
-        break;
-    }
-    switch (assetType) {
-      case "TEXT":
-      case "JSON":
-      case "AUDIO":
-        const request = new XMLHttpRequest();
-        request.open("GET", path, true);
-        request.responseType = responseType;
-        request.onload = function() {
-          return resolve(request.response);
-        };
-        request.onerror = function() {
-          reject(`cannot load ${path} at ${path}`);
-        };
-        request.send();
-        break;
-      case "IMAGE":
-        let obj = new Image();
-        obj.onload = function() {
-          return resolve(obj);
-        };
-        obj.onerror = function() {
-          reject(`cannot load ${path} at ${path}`);
-        };
-        obj.src = path;
-        break;
-      default:
-        reject(`unsupported asset type ${assetType}`);
-    }
-  });
-}
-
-// src/core/scene-manager.ts
-var SceneManager = class {
-  constructor() {
-    __publicField(this, "currentScenes", []);
-    __publicField(this, "scenes", []);
-    __publicField(this, "_newSceneInitPromises");
-  }
-  addScene(scene) {
-    if (this.scenes.findIndex((s) => s.id === scene?.id) !== -1) {
-      console.warn("Scene with same id already exists, provide a new id");
-      return;
-    }
-    this.scenes.push(scene);
-  }
-  deleteScene(id) {
-    const i = this.getSceneIndex(id, this.currentScenes);
-    this.currentScenes[i].clean();
-    this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
-  }
-  getCurrentScenes() {
-    return this.currentScenes;
-  }
-  /**
-   * Changes the current scene to a new scene specified by the given ID.
-   *
-   * This function initializes the new scene, optionally initializes a loading scene, and updates
-   * the current scenes stack. It also handles cleaning up the previous scene state if specified.
-   *
-   * @param {string} id - The ID of the new scene to transition to.
-   * @param {boolean} [cleanPreviousState=true] - A flag indicating whether to clean up the previous scene state.
-   * @param {string} [loadingSceneId] - The ID of an optional loading scene to display while the new scene is initializing.
-   * @returns {Promise<void>} A promise that resolves when the scene transition is complete.
-   */
-  async changeScene(id, cleanPreviousState = true, loadingSceneId) {
-    const lastCurrentSceneId = this.currentScenes[this.currentScenes.length - 1]?.id;
-    const newScene = this.scenes[this.getSceneIndex(id, this.scenes)];
-    if (loadingSceneId !== void 0) {
-      const loadingSceneIndex = this.getSceneIndex(loadingSceneId, this.scenes);
-      let loadingScene = this.scenes[loadingSceneIndex];
-      const loadingSceneInitPromises = loadingScene.init();
-      if (loadingSceneInitPromises !== void 0) {
-        await loadingSceneInitPromises;
-      }
-      this.currentScenes.push(loadingScene);
-    }
-    try {
-      this._newSceneInitPromises = await newScene.init();
-    } catch (err) {
-      console.error(err);
-    }
-    if (this._newSceneInitPromises !== void 0) {
-      await this._newSceneInitPromises;
-    }
-    if (cleanPreviousState && lastCurrentSceneId !== void 0) {
-      this.deleteScene(lastCurrentSceneId);
-    }
-    if (loadingSceneId !== void 0) {
-      this.deleteScene(loadingSceneId);
-    }
-    this.currentScenes.push(newScene);
-  }
-  getSceneIndex(id, scenes) {
-    const loadingSceneIndex = scenes.findIndex((s) => s.id === id);
-    if (loadingSceneIndex === -1) {
-      throw new Error(`cannot find scene with id ${id}`);
-    }
-    return loadingSceneIndex;
-  }
-};
-
-// src/core/shared-cache.ts
-function createSharedCache(data) {
-  return {
-    data,
-    dirty: true,
-    invalidate() {
-      this.dirty = true;
-    }
-  };
 }
 
 // src/mixins/with-dragging.ts
@@ -1989,11 +1953,11 @@ export {
   ASSETS_MANAGER_DI,
   AssetsManager,
   AudioController,
-  BLUE,
   BaseObject,
   BaseObjectClass,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  CORNER_TILE_COLORS,
   CanvasHitboxTagComponent,
   ColorHeap,
   ComponentContainer,
@@ -2003,7 +1967,6 @@ export {
   EcsComponent,
   EcsSystem,
   GAME_LOOP_TIME,
-  GREEN,
   Game,
   GameObject,
   HEADER_HEIGHT,
@@ -2013,7 +1976,6 @@ export {
   LinkedList,
   LinkedListNode,
   QuadTree,
-  RED,
   SCENE_MANAGER_DI,
   SceneManager,
   Settings,
@@ -2021,7 +1983,6 @@ export {
   UILabel,
   UIPanel,
   UIWindow,
-  YELLOW,
   angleBetween,
   asyncReq,
   calculateEdgesPerpendiculars,

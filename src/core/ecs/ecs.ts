@@ -70,7 +70,7 @@ export class ECS {
   }
 
   // API: Systems
-  public addSystem(system: EcsSystem): void {
+  public addSystem(system: EcsSystem, priority?: number): void {
     // Checking invariant: systems should not have an empty
     // Components list, or they'll run on every entity. Simply remove
     // or special case this check if you do want a System that runs
@@ -83,6 +83,7 @@ export class ECS {
     // Give system a reference to the ECS so it can actually do
     // anything.
     system.ecs = this;
+    if (priority) system.priority = priority;
 
     // Save system and set who it should track immediately.
     this.systems.set(system, new Set());

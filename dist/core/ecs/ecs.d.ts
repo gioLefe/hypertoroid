@@ -29,7 +29,7 @@ export declare class ECS {
      */
     getAllEntities(): ReadonlyMap<EcsEntity, ComponentContainer>;
     removeComponent(entity: EcsEntity, componentClass: Function): void;
-    addSystem(system: EcsSystem): void;
+    addSystem(system: EcsSystem, priority?: number): void;
     removeSystem(system: EcsSystem): void;
     /**
      * This is ordinarily called once per tick (e.g., every frame). It

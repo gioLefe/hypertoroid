@@ -5,10 +5,16 @@ export type Color = {
   a: number;
 };
 
-export const RED: Color = { r: 255, g: 0, b: 0, a: 255 };
-export const GREEN: Color = { r: 0, g: 255, b: 0, a: 255 };
-export const BLUE: Color = { r: 0, g: 0, b: 255, a: 255 };
-export const YELLOW: Color = { r: 255, g: 255, b: 0, a: 255 };
+const RED: Color = { r: 255, g: 0, b: 0, a: 255 };
+const GREEN: Color = { r: 0, g: 255, b: 0, a: 255 };
+const BLUE: Color = { r: 0, g: 0, b: 255, a: 255 };
+const YELLOW: Color = { r: 255, g: 255, b: 0, a: 255 };
+export const CORNER_TILE_COLORS = {
+  RED,
+  GREEN,
+  BLUE,
+  YELLOW,
+};
 
 export function isSameColor(color: Color, colorToCompare: Color): boolean {
   return (
