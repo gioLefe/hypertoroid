@@ -1,13 +1,5 @@
-import {
-  AssetsManager,
-  AudioController,
-  DIContainer,
-  SceneHandler,
-  SceneManager,
-  Settings,
-} from "../core";
+import { DIContainer, SceneHandler, SceneManager, Settings } from "../core";
 import { GAME_LOOP_TIME } from "../core/settings";
-import { AssetsHandler } from "../core/types/assets-handler";
 import { CanvasScene2D } from "./canvas-scene";
 import { GameCycle } from "./game-cycle";
 
@@ -19,7 +11,6 @@ export abstract class Game implements GameCycle {
   protected ctx: CanvasRenderingContext2D;
   protected diContainer = DIContainer.getInstance();
   protected sceneManager: SceneHandler | undefined;
-  protected assetsManager: AssetsHandler = new AssetsManager();
   protected settingsManager: Settings | undefined;
 
   private lastUpdateTime: DOMHighResTimeStamp = 0;
@@ -80,14 +71,12 @@ export abstract class Game implements GameCycle {
       SCENE_MANAGER_DI,
       this.sceneManager,
     );
-    this.diContainer.register<AssetsHandler>(
-      ASSETS_MANAGER_DI,
-      this.assetsManager,
-    );
-    this.diContainer.register<AudioController>(
-      AudioController.AUDIO_CONTROLLER_DI,
-      new AudioController(),
-    );
+
+    // TODO: fix
+    // this.diContainer.register<AudioController>(
+    //   AudioController.AUDIO_CONTROLLER_DI,
+    //   new AudioController(),
+    // );
     this.diContainer.register<Settings>(
       Settings.INSTANCE_ID,
       this.settingsManager,

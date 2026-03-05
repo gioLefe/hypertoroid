@@ -1,5 +1,4 @@
 export * from "./assets-manager";
-export * from "./audio-controller";
 export * from "./di-container";
 export * from "./ecs";
 export * from "./interaction-manager";

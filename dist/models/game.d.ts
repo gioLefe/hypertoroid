@@ -1,5 +1,4 @@
 import { DIContainer, SceneHandler, Settings } from "../core";
-import { AssetsHandler } from "../core/types/assets-handler";
 import { GameCycle } from "./game-cycle";
 export declare const SCENE_MANAGER_DI = "SceneManager";
 export declare const ASSETS_MANAGER_DI = "AsetsManager";
@@ -8,7 +7,6 @@ export declare abstract class Game implements GameCycle {
     protected ctx: CanvasRenderingContext2D;
     protected diContainer: DIContainer;
     protected sceneManager: SceneHandler | undefined;
-    protected assetsManager: AssetsHandler;
     protected settingsManager: Settings | undefined;
     private lastUpdateTime;
     private cycleStartTime;

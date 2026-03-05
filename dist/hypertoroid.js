@@ -144,7 +144,6 @@ var Game = class {
     __publicField(this, "ctx");
     __publicField(this, "diContainer", DIContainer.getInstance());
     __publicField(this, "sceneManager");
-    __publicField(this, "assetsManager", new AssetsManager());
     __publicField(this, "settingsManager");
     __publicField(this, "lastUpdateTime", 0);
     __publicField(this, "cycleStartTime", 0);
@@ -205,10 +204,6 @@ var Game = class {
     this.diContainer.register(
       SCENE_MANAGER_DI,
       this.sceneManager
-    );
-    this.diContainer.register(
-      ASSETS_MANAGER_DI,
-      this.assetsManager
     );
     this.diContainer.register(
       AudioController.AUDIO_CONTROLLER_DI,
