@@ -115,142 +115,6 @@ var AssetsManager = class {
   }
 };
 
-// src/core/settings.ts
-var CANVAS_WIDTH = "canvasW";
-var CANVAS_HEIGHT = "canvasH";
-var GAME_LOOP_TIME = "gameLoopTime";
-var Settings = class {
-  constructor() {
-    __publicField(this, "settings", /* @__PURE__ */ new Map());
-  }
-  get(key) {
-    if (!this.settings.has(key)) {
-      return void 0;
-    }
-    return this.settings.get(key);
-  }
-  set(key, value) {
-    this.settings = this.settings.set(key, value);
-  }
-};
-__publicField(Settings, "INSTANCE_ID", "settings");
-
-// src/models/game.ts
-var SCENE_MANAGER_DI = "SceneManager";
-var ASSETS_MANAGER_DI = "AsetsManager";
-var Game = class {
-  constructor(canvas, canvasWidth, canvasHeight, fps = 30) {
-    __publicField(this, "canvas");
-    __publicField(this, "ctx");
-    __publicField(this, "diContainer", DIContainer.getInstance());
-    __publicField(this, "sceneManager");
-    __publicField(this, "settingsManager");
-    __publicField(this, "lastUpdateTime", 0);
-    __publicField(this, "cycleStartTime", 0);
-    __publicField(this, "cycleElapsed", 0);
-    __publicField(this, "elapsedTime", 0);
-    __publicField(this, "frameInterval", 0);
-    __publicField(this, "fixedDeltaTime", 0);
-    // cache
-    __publicField(this, "_currentScenes");
-    __publicField(this, "debug", {
-      init: false,
-      update: false,
-      render: false
-    });
-    __publicField(this, "gameLoop", async (timestamp) => {
-      this.elapsedTime = timestamp - this.lastUpdateTime;
-      this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
-      if (this.elapsedTime > this.frameInterval) {
-        this.cycleStartTime = performance.now();
-        try {
-          this.update(this.fixedDeltaTime);
-          await this.render(this.ctx, this.elapsedTime);
-        } catch (err) {
-          console.error(err);
-        }
-        this.cycleElapsed = performance.now() - this.cycleStartTime;
-        if (this.cycleElapsed > 0) {
-          this.settingsManager?.set(GAME_LOOP_TIME, this.cycleElapsed);
-        }
-      }
-      requestAnimationFrame(await this.gameLoop);
-    });
-    if (canvas === null) {
-      console.error(`%c *** Error, Canvas cannot be null`);
-      throw Error();
-    }
-    this.canvas = canvas;
-    this.canvas.width = canvasWidth;
-    this.canvas.height = canvasHeight;
-    const context = this.canvas.getContext("2d");
-    if (context === null) {
-      throw Error("ctx is null");
-    }
-    this.ctx = context;
-    this.frameInterval = 1e3 / fps;
-    this.fixedDeltaTime = this.frameInterval / 1e3;
-    this.init();
-  }
-  clean(..._args) {
-    throw new Error("Method not implemented.");
-  }
-  async init() {
-    if (this.debug.init) {
-      console.log(`%c *** Init`, `background:#020; color:#adad00`);
-    }
-    this.sceneManager = new SceneManager();
-    this.settingsManager = new Settings();
-    this.diContainer.register(
-      SCENE_MANAGER_DI,
-      this.sceneManager
-    );
-    this.diContainer.register(
-      AudioController.AUDIO_CONTROLLER_DI,
-      new AudioController()
-    );
-    this.diContainer.register(
-      Settings.INSTANCE_ID,
-      this.settingsManager
-    );
-  }
-  update(deltaTime) {
-    if (this.debug.update) {
-      console.log(`%c *** Update`, `background:#020; color:#adad00`);
-    }
-    this._currentScenes = this.sceneManager?.getCurrentScenes();
-    if (!this._currentScenes) {
-      console.warn("no scene to update");
-      return;
-    }
-    for (let i = 0; i < this._currentScenes.length; i++) {
-      try {
-        this._currentScenes[i].update(deltaTime);
-      } catch (error) {
-        console.error("Scene update failed:", error);
-      }
-    }
-  }
-  async render(_ctx, deltaTime, ..._args) {
-    if (this.debug.render) {
-      console.log(`%c *** Render`, `background:#020; color:#adad00`);
-    }
-    this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this._currentScenes = this.sceneManager?.getCurrentScenes();
-    if (this._currentScenes === void 0) {
-      console.warn("no scene to render");
-      return;
-    }
-    for (let i = 0; i < this._currentScenes.length; i++) {
-      await this._currentScenes[i].render(this.ctx, deltaTime);
-    }
-  }
-  start() {
-    this.lastUpdateTime = performance.now();
-    this.gameLoop(this.lastUpdateTime);
-  }
-};
-
 // src/core/di-container.ts
 var _DIContainer = class _DIContainer {
   /**
@@ -315,58 +179,6 @@ var _DIContainer = class _DIContainer {
  */
 __publicField(_DIContainer, "instance");
 var DIContainer = _DIContainer;
-
-// src/core/audio-controller.ts
-var MAX_VOLUME = 1;
-var AudioController = class {
-  constructor() {
-    __publicField(this, "assetsManager", DIContainer.getInstance().resolve(ASSETS_MANAGER_DI));
-    __publicField(this, "audioContext", new AudioContext());
-    __publicField(this, "mainGainNode", this.audioContext.createGain());
-    __publicField(this, "playingSounds", {});
-    this.mainGainNode.gain.value = MAX_VOLUME;
-    this.mainGainNode.connect(this.audioContext.destination);
-  }
-  get playingAssetsIds() {
-    return Object.keys(this.playingSounds);
-  }
-  setMainVolume(value) {
-    this.mainGainNode.gain.value = value >= 0 && value <= MAX_VOLUME ? value : MAX_VOLUME;
-  }
-  getMainVolume() {
-    return this.mainGainNode.gain.value;
-  }
-  playAsset(id, audioPlayingOptions = { loop: false, force: true }) {
-    const soundAsset = this.assetsManager.find(id);
-    if (soundAsset === void 0) {
-      console.warn("Can`t find asset", id);
-    }
-    if (this.playingAssetsIds.indexOf(id) > -1 && audioPlayingOptions.force === false) {
-      return;
-    }
-    this.playingSounds[id] = audioPlayingOptions;
-    const arrayBuffer = this.assetsManager.find(id)?.source;
-    if (arrayBuffer === void 0) {
-      return;
-    }
-    this.audioContext.decodeAudioData(arrayBuffer.slice(0)).then((audioBuffer) => {
-      const audioBufferSourceNode = this.audioContext.createBufferSource();
-      audioBufferSourceNode.buffer = audioBuffer;
-      audioBufferSourceNode.connect(this.mainGainNode);
-      audioBufferSourceNode.start();
-      audioBufferSourceNode.loop = audioPlayingOptions.loop;
-      audioBufferSourceNode.addEventListener("ended", () => {
-        Object.entries(this.playingSounds).forEach((n) => {
-          if (n[0] === id) {
-            console.log(`Audio buffer ended event: ${id}`);
-            delete this.playingSounds[id];
-          }
-        });
-      });
-    });
-  }
-};
-__publicField(AudioController, "AUDIO_CONTROLLER_DI", "AudioController");
 
 // src/core/ecs/ecs-component.ts
 var EcsComponent = class {
@@ -1212,6 +1024,26 @@ var SceneManager = class {
   }
 };
 
+// src/core/settings.ts
+var CANVAS_WIDTH = "canvasW";
+var CANVAS_HEIGHT = "canvasH";
+var GAME_LOOP_TIME = "gameLoopTime";
+var Settings = class {
+  constructor() {
+    __publicField(this, "settings", /* @__PURE__ */ new Map());
+  }
+  get(key) {
+    if (!this.settings.has(key)) {
+      return void 0;
+    }
+    return this.settings.get(key);
+  }
+  set(key, value) {
+    this.settings = this.settings.set(key, value);
+  }
+};
+__publicField(Settings, "INSTANCE_ID", "settings");
+
 // src/core/shared-cache.ts
 function createSharedCache(data) {
   return {
@@ -1324,6 +1156,118 @@ function getImageBufferColorAt(x, y, width, data) {
     a: data[offset + 3]
   };
 }
+
+// src/models/game.ts
+var SCENE_MANAGER_DI = "SceneManager";
+var ASSETS_MANAGER_DI = "AsetsManager";
+var Game = class {
+  constructor(canvas, canvasWidth, canvasHeight, fps = 30) {
+    __publicField(this, "canvas");
+    __publicField(this, "ctx");
+    __publicField(this, "diContainer", DIContainer.getInstance());
+    __publicField(this, "sceneManager");
+    __publicField(this, "settingsManager");
+    __publicField(this, "lastUpdateTime", 0);
+    __publicField(this, "cycleStartTime", 0);
+    __publicField(this, "cycleElapsed", 0);
+    __publicField(this, "elapsedTime", 0);
+    __publicField(this, "frameInterval", 0);
+    __publicField(this, "fixedDeltaTime", 0);
+    // cache
+    __publicField(this, "_currentScenes");
+    __publicField(this, "debug", {
+      init: false,
+      update: false,
+      render: false
+    });
+    __publicField(this, "gameLoop", async (timestamp) => {
+      this.elapsedTime = timestamp - this.lastUpdateTime;
+      this.lastUpdateTime = timestamp - this.elapsedTime % this.frameInterval;
+      if (this.elapsedTime > this.frameInterval) {
+        this.cycleStartTime = performance.now();
+        try {
+          this.update(this.fixedDeltaTime);
+          await this.render(this.ctx, this.elapsedTime);
+        } catch (err) {
+          console.error(err);
+        }
+        this.cycleElapsed = performance.now() - this.cycleStartTime;
+        if (this.cycleElapsed > 0) {
+          this.settingsManager?.set(GAME_LOOP_TIME, this.cycleElapsed);
+        }
+      }
+      requestAnimationFrame(await this.gameLoop);
+    });
+    if (canvas === null) {
+      console.error(`%c *** Error, Canvas cannot be null`);
+      throw Error();
+    }
+    this.canvas = canvas;
+    this.canvas.width = canvasWidth;
+    this.canvas.height = canvasHeight;
+    const context = this.canvas.getContext("2d");
+    if (context === null) {
+      throw Error("ctx is null");
+    }
+    this.ctx = context;
+    this.frameInterval = 1e3 / fps;
+    this.fixedDeltaTime = this.frameInterval / 1e3;
+    this.init();
+  }
+  clean(..._args) {
+    throw new Error("Method not implemented.");
+  }
+  async init() {
+    if (this.debug.init) {
+      console.log(`%c *** Init`, `background:#020; color:#adad00`);
+    }
+    this.sceneManager = new SceneManager();
+    this.settingsManager = new Settings();
+    this.diContainer.register(
+      SCENE_MANAGER_DI,
+      this.sceneManager
+    );
+    this.diContainer.register(
+      Settings.INSTANCE_ID,
+      this.settingsManager
+    );
+  }
+  update(deltaTime) {
+    if (this.debug.update) {
+      console.log(`%c *** Update`, `background:#020; color:#adad00`);
+    }
+    this._currentScenes = this.sceneManager?.getCurrentScenes();
+    if (!this._currentScenes) {
+      console.warn("no scene to update");
+      return;
+    }
+    for (let i = 0; i < this._currentScenes.length; i++) {
+      try {
+        this._currentScenes[i].update(deltaTime);
+      } catch (error) {
+        console.error("Scene update failed:", error);
+      }
+    }
+  }
+  async render(_ctx, deltaTime, ..._args) {
+    if (this.debug.render) {
+      console.log(`%c *** Render`, `background:#020; color:#adad00`);
+    }
+    this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this._currentScenes = this.sceneManager?.getCurrentScenes();
+    if (this._currentScenes === void 0) {
+      console.warn("no scene to render");
+      return;
+    }
+    for (let i = 0; i < this._currentScenes.length; i++) {
+      await this._currentScenes[i].render(this.ctx, deltaTime);
+    }
+  }
+  start() {
+    this.lastUpdateTime = performance.now();
+    this.gameLoop(this.lastUpdateTime);
+  }
+};
 
 // src/models/game-object.ts
 var GameObject = class {
@@ -1950,7 +1894,6 @@ var UIWindow = class extends DraggableObject {
 export {
   ASSETS_MANAGER_DI,
   AssetsManager,
-  AudioController,
   BaseObject,
   BaseObjectClass,
   CANVAS_HEIGHT,
