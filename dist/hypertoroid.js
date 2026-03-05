@@ -591,7 +591,10 @@ var EcsSystem = class {
 
 // src/core/ecs/components/hitbox-component.ts
 var HitboxComponent = class extends EcsComponent {
-  constructor(id, priority, callbacks, data, boundingBox, hitTest, color, image) {
+  constructor(id, priority, callbacks, data, boundingBox = {
+    nw: { x: 0, y: 0 },
+    se: { x: 0, y: 0 }
+  }, hitTest, color, image) {
     super();
     this.id = id;
     this.priority = priority;

@@ -30,7 +30,10 @@ export class HitboxComponent extends EcsComponent {
     public callbacks?: HTMLEventCallback,
     public data?: Partial<HitboxData>,
     // Spatial definition (at least one should be provided)
-    public boundingBox?: BoundingBox<number>,
+    public boundingBox: BoundingBox<number> = {
+      nw: { x: 0, y: 0 },
+      se: { x: 0, y: 0 },
+    },
     public hitTest?: HitTestFn,
     public color?: HitboxColor,
     public image?: ImageBitmap,
