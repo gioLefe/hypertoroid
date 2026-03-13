@@ -304,6 +304,7 @@ var ECS = class {
   // API: Query helpers
   /**
    * Find all entities that have a specific component type.
+   * THIS METHOD IS EXPENSIVE, AVOID WHEN POSSIBLE (Especially in systems)
    *
    * @param componentClass - The component class to search for
    * @returns Array of entities that have the specified component
@@ -318,6 +319,7 @@ var ECS = class {
   }
   /**
    * Find the first entity that has a specific component matching a predicate.
+   * THIS METHOD IS EXPENSIVE, AVOID WHEN POSSIBLE (Especially in systems)
    *
    * @param componentClass - The component class to search for
    * @param predicate - Function to test each component
@@ -1165,8 +1167,8 @@ var Game = class {
     __publicField(this, "canvas");
     __publicField(this, "ctx");
     __publicField(this, "diContainer", DIContainer.getInstance());
-    __publicField(this, "sceneManager");
-    __publicField(this, "settingsManager");
+    __publicField(this, "sceneManager", new SceneManager());
+    __publicField(this, "settingsManager", new Settings());
     __publicField(this, "lastUpdateTime", 0);
     __publicField(this, "cycleStartTime", 0);
     __publicField(this, "cycleElapsed", 0);
@@ -1196,7 +1198,7 @@ var Game = class {
           this.settingsManager?.set(GAME_LOOP_TIME, this.cycleElapsed);
         }
       }
-      requestAnimationFrame(await this.gameLoop);
+      requestAnimationFrame(this.gameLoop);
     });
     if (canvas === null) {
       console.error(`%c *** Error, Canvas cannot be null`);
@@ -1218,11 +1220,8 @@ var Game = class {
     throw new Error("Method not implemented.");
   }
   async init() {
-    if (this.debug.init) {
+    if (this.debug.init)
       console.log(`%c *** Init`, `background:#020; color:#adad00`);
-    }
-    this.sceneManager = new SceneManager();
-    this.settingsManager = new Settings();
     this.diContainer.register(
       SCENE_MANAGER_DI,
       this.sceneManager
@@ -1233,9 +1232,8 @@ var Game = class {
     );
   }
   update(deltaTime) {
-    if (this.debug.update) {
+    if (this.debug.update)
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
-    }
     this._currentScenes = this.sceneManager?.getCurrentScenes();
     if (!this._currentScenes) {
       console.warn("no scene to update");
@@ -1250,9 +1248,8 @@ var Game = class {
     }
   }
   async render(_ctx, deltaTime, ..._args) {
-    if (this.debug.render) {
+    if (this.debug.render)
       console.log(`%c *** Render`, `background:#020; color:#adad00`);
-    }
     this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this._currentScenes = this.sceneManager?.getCurrentScenes();
     if (this._currentScenes === void 0) {

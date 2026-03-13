@@ -2,7 +2,6 @@ import { ComponentContainer, EcsComponent } from "./ecs-component";
 import { EcsEntity } from "./ecs-entity";
 import { EcsSystem } from "./ecs-system";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ComponentClass<T extends EcsComponent> = new (...args: any[]) => T;
 
 // Credits: https://maxwellforbes.com/posts/typescript-ecs-implementation/
@@ -132,6 +131,7 @@ export class ECS {
 
   /**
    * Find all entities that have a specific component type.
+   * THIS METHOD IS EXPENSIVE, AVOID WHEN POSSIBLE (Especially in systems)
    *
    * @param componentClass - The component class to search for
    * @returns Array of entities that have the specified component
@@ -150,6 +150,7 @@ export class ECS {
 
   /**
    * Find the first entity that has a specific component matching a predicate.
+   * THIS METHOD IS EXPENSIVE, AVOID WHEN POSSIBLE (Especially in systems)
    *
    * @param componentClass - The component class to search for
    * @param predicate - Function to test each component

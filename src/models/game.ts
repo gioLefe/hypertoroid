@@ -10,8 +10,8 @@ export abstract class Game implements GameCycle {
   protected canvas: HTMLCanvasElement;
   protected ctx: CanvasRenderingContext2D;
   protected diContainer = DIContainer.getInstance();
-  protected sceneManager: SceneHandler | undefined;
-  protected settingsManager: Settings | undefined;
+  protected sceneManager: SceneHandler = new SceneManager();
+  protected settingsManager: Settings = new Settings();
 
   private lastUpdateTime: DOMHighResTimeStamp = 0;
   private cycleStartTime: DOMHighResTimeStamp = 0;
@@ -61,12 +61,9 @@ export abstract class Game implements GameCycle {
   }
 
   async init(): Promise<void> {
-    if (this.debug.init) {
+    if (this.debug.init)
       console.log(`%c *** Init`, `background:#020; color:#adad00`);
-    }
 
-    this.sceneManager = new SceneManager();
-    this.settingsManager = new Settings();
     this.diContainer.register<SceneHandler>(
       SCENE_MANAGER_DI,
       this.sceneManager,
@@ -84,9 +81,8 @@ export abstract class Game implements GameCycle {
   }
 
   update(deltaTime: number): void {
-    if (this.debug.update) {
+    if (this.debug.update)
       console.log(`%c *** Update`, `background:#020; color:#adad00`);
-    }
 
     this._currentScenes = this.sceneManager?.getCurrentScenes();
     if (!this._currentScenes) {
@@ -108,9 +104,9 @@ export abstract class Game implements GameCycle {
     deltaTime: number,
     ..._args: any
   ): Promise<void> {
-    if (this.debug.render) {
+    if (this.debug.render)
       console.log(`%c *** Render`, `background:#020; color:#adad00`);
-    }
+
     this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this._currentScenes = this.sceneManager?.getCurrentScenes();
@@ -146,7 +142,7 @@ export abstract class Game implements GameCycle {
         this.settingsManager?.set<number>(GAME_LOOP_TIME, this.cycleElapsed);
       }
     }
-    requestAnimationFrame(await this.gameLoop);
+    requestAnimationFrame(this.gameLoop);
   };
 
   start(): void {

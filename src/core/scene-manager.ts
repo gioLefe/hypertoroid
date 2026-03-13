@@ -19,7 +19,7 @@ export class SceneManager implements SceneHandler {
     this.currentScenes[i].clean();
     this.currentScenes = this.currentScenes.filter((_, index) => index !== i);
   }
-  getCurrentScenes(): CanvasScene2D[] | undefined {
+  getCurrentScenes(): CanvasScene2D[] {
     return this.currentScenes;
   }
 

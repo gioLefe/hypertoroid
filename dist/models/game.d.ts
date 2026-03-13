@@ -6,8 +6,8 @@ export declare abstract class Game implements GameCycle {
     protected canvas: HTMLCanvasElement;
     protected ctx: CanvasRenderingContext2D;
     protected diContainer: DIContainer;
-    protected sceneManager: SceneHandler | undefined;
-    protected settingsManager: Settings | undefined;
+    protected sceneManager: SceneHandler;
+    protected settingsManager: Settings;
     private lastUpdateTime;
     private cycleStartTime;
     private cycleElapsed;

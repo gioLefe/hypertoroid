@@ -39,6 +39,7 @@ export declare class ECS {
     update(deltaTime?: number): Promise<void>;
     /**
      * Find all entities that have a specific component type.
+     * THIS METHOD IS EXPENSIVE, AVOID WHEN POSSIBLE (Especially in systems)
      *
      * @param componentClass - The component class to search for
      * @returns Array of entities that have the specified component
@@ -46,6 +47,7 @@ export declare class ECS {
     findEntitiesByComponent<T extends EcsComponent>(componentClass: ComponentClass<T>): EcsEntity[];
     /**
      * Find the first entity that has a specific component matching a predicate.
+     * THIS METHOD IS EXPENSIVE, AVOID WHEN POSSIBLE (Especially in systems)
      *
      * @param componentClass - The component class to search for
      * @param predicate - Function to test each component

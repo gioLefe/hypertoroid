@@ -6,7 +6,7 @@ export declare class SceneManager implements SceneHandler {
     private _newSceneInitPromises;
     addScene(scene: CanvasScene2D): void;
     deleteScene(id: string): void;
-    getCurrentScenes(): CanvasScene2D[] | undefined;
+    getCurrentScenes(): CanvasScene2D[];
     /**
      * Changes the current scene to a new scene specified by the given ID.
      *
