@@ -11,3 +11,14 @@ export function isPointInAlignedBBox(
     point.y <= bbox.se.y
   );
 }
+
+export function isPointInBounds(
+  x: number,
+  y: number,
+  nwX: number,
+  nwY: number,
+  seX: number,
+  seY: number,
+) {
+  return x >= nwX && x < seX && y >= nwY && y < seY;
+}

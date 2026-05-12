@@ -14,6 +14,7 @@ export class ECS {
 
   // Sorted array of systems by priority (ascending) for deterministic update order
   private systemOrder: EcsSystem[] = [];
+  private systemPerformance: number[] = [];
 
   // Bookkeeping for entities.
   private nextEntityID = 0;
@@ -111,10 +112,12 @@ export class ECS {
   public async update(deltaTime: number = 0): Promise<void> {
     // Update all systems in priority order (ascending)
     for (let i = 0; i < this.systemOrder.length; i++) {
+      const p = performance.now();
       this._targetEntities = this.systems.get(this.systemOrder[i]);
       if (this._targetEntities === undefined) continue;
 
       await this.systemOrder[i].update(this._targetEntities, deltaTime);
+      this.systemPerformance[i] = performance.now() - p;
     }
 
     // Remove any entities that were marked for deletion during the update.
@@ -200,6 +203,13 @@ export class ECS {
 
   public onFrameEnd(callback: () => void) {
     this.frameEnd = callback;
+  }
+
+  public getSystemPerformances() {
+    return this.systemOrder.map((s, i) => ({
+      name: s.constructor.name,
+      performance: this.systemPerformance[i],
+    }));
   }
 
   // Private methods for doing internal state checks and mutations.

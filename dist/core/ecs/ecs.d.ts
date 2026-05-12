@@ -7,6 +7,7 @@ export declare class ECS {
     private entities;
     private systems;
     private systemOrder;
+    private systemPerformance;
     private nextEntityID;
     private entitiesToDestroy;
     private frameEnd;
@@ -63,6 +64,10 @@ export declare class ECS {
      */
     findEntitiesByComponentValue<T extends EcsComponent>(componentClass: ComponentClass<T>, predicate: (component: T) => boolean): EcsEntity[];
     onFrameEnd(callback: () => void): void;
+    getSystemPerformances(): {
+        name: string;
+        performance: number;
+    }[];
     private destroyEntity;
     private checkE;
     private checkES;

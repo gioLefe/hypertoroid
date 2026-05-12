@@ -217,6 +217,7 @@ var ECS = class {
     __publicField(this, "systems", /* @__PURE__ */ new Map());
     // Sorted array of systems by priority (ascending) for deterministic update order
     __publicField(this, "systemOrder", []);
+    __publicField(this, "systemPerformance", []);
     // Bookkeeping for entities.
     __publicField(this, "nextEntityID", 0);
     __publicField(this, "entitiesToDestroy", new Array());
@@ -291,9 +292,11 @@ var ECS = class {
    */
   async update(deltaTime = 0) {
     for (let i = 0; i < this.systemOrder.length; i++) {
+      const p = performance.now();
       this._targetEntities = this.systems.get(this.systemOrder[i]);
       if (this._targetEntities === void 0) continue;
       await this.systemOrder[i].update(this._targetEntities, deltaTime);
+      this.systemPerformance[i] = performance.now() - p;
     }
     for (let i = 0; i < this.entitiesToDestroy.length; i++) {
       this.destroyEntity(this.entitiesToDestroy[i]);
@@ -353,6 +356,12 @@ var ECS = class {
   }
   onFrameEnd(callback) {
     this.frameEnd = callback;
+  }
+  getSystemPerformances() {
+    return this.systemOrder.map((s, i) => ({
+      name: s.constructor.name,
+      performance: this.systemPerformance[i]
+    }));
   }
   // Private methods for doing internal state checks and mutations.
   destroyEntity(entity) {
@@ -729,6 +738,9 @@ function generatePolygonPoints(numSides, sideLength, radiants) {
 // src/helpers/rect-collision.ts
 function isPointInAlignedBBox(point, bbox) {
   return point.x >= bbox.nw.x && point.x <= bbox.se.x && point.y >= bbox.nw.y && point.y <= bbox.se.y;
+}
+function isPointInBounds(x, y, nwX, nwY, seX, seY) {
+  return x >= nwX && x < seX && y >= nwY && y < seY;
 }
 
 // src/helpers/sat-collision.ts
@@ -1945,6 +1957,7 @@ export {
   getWrappedTextLines,
   intervalsOverlap,
   isPointInAlignedBBox,
+  isPointInBounds,
   isSameColor,
   magnitude,
   pivotComparator,
